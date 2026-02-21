@@ -75,7 +75,7 @@ export default function Home() {
   const [hotTotalPages, setHotTotalPages] = useState(1);
   const [activeHotKey, setActiveHotKey] = useState<string | null>(null);
   const [loadingHotKey, setLoadingHotKey] = useState<string | null>(null);
-  const setStatus = () => {};
+  const [status, setStatus] = useState("");
   const { address: connectedWallet, isConnected } = useAccount();
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -357,6 +357,7 @@ export default function Home() {
         <p className="mt-2 text-sm text-zinc-600">
           Community consensus only. Not financial advice.
         </p>
+        <p className="mt-2 min-h-5 text-sm text-zinc-700">{status}</p>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-[120px_1fr_auto_auto]">
           <div className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-2">

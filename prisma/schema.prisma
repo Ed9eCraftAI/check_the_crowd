@@ -7,7 +7,7 @@
 generator client {
   provider   = "prisma-client-js"
   engineType = "binary"
-  output     = "../pros-b-next/node_modules/.prisma/client"
+  output     = "../api/node_modules/.prisma/client"
 }
 
 datasource db {
