@@ -1,7 +1,25 @@
 import { NextResponse } from "next/server";
 import { getWhatsHotTokens } from "@/lib/dev-store";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
+  const ip = getClientIp(req);
+  const limitResult = checkRateLimit({
+    key: `tokens:hot:${ip}`,
+    limit: 120,
+    windowMs: 60_000,
+  });
+
+  if (!limitResult.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limitResult.retryAfterSeconds) },
+      },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const rawLimit = searchParams.get("limit");
   const rawPage = searchParams.get("page");

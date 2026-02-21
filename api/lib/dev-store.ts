@@ -3,6 +3,75 @@ import { randomUUID } from "node:crypto";
 import type { Chain, VoteChoice } from "@/lib/token";
 import { normalizeAddress, toConsensusLabel } from "@/lib/token";
 
+const VOTE_NONCE_TTL_MS = 5 * 60 * 1000;
+
+export async function issueVoteNonce(walletInput: string) {
+  const wallet = normalizeAddress(walletInput);
+  const issuedAt = new Date();
+  const expiresAt = new Date(issuedAt.getTime() + VOTE_NONCE_TTL_MS);
+  const nonce = randomUUID();
+
+  await prisma.nonce.create({
+    data: {
+      id: randomUUID(),
+      wallet,
+      nonce,
+      issuedAt,
+      expiresAt,
+    },
+  });
+
+  return {
+    wallet,
+    nonce,
+    issuedAt: issuedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
+export async function consumeVoteNonce(input: {
+  wallet: string;
+  nonce: string;
+  issuedAt: string;
+}) {
+  const wallet = normalizeAddress(input.wallet);
+  const issuedAt = new Date(input.issuedAt);
+
+  if (Number.isNaN(issuedAt.getTime())) return false;
+
+  const nonceRecord = await prisma.nonce.findUnique({
+    where: {
+      wallet_nonce: {
+        wallet,
+        nonce: input.nonce,
+      },
+    },
+    select: {
+      id: true,
+      issuedAt: true,
+      expiresAt: true,
+      usedAt: true,
+    },
+  });
+
+  if (!nonceRecord) return false;
+  if (nonceRecord.usedAt) return false;
+  if (nonceRecord.expiresAt.getTime() <= Date.now()) return false;
+  if (nonceRecord.issuedAt.getTime() !== issuedAt.getTime()) return false;
+
+  const result = await prisma.nonce.updateMany({
+    where: {
+      id: nonceRecord.id,
+      usedAt: null,
+    },
+    data: {
+      usedAt: new Date(),
+    },
+  });
+
+  return result.count === 1;
+}
+
 export async function registerToken(chain: Chain, addressInput: string) {
   const address = normalizeAddress(addressInput);
 

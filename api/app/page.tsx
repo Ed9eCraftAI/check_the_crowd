@@ -99,7 +99,7 @@ export default function Home() {
     });
   }, [projectId]);
 
-  const loadWhatsHot = useCallback(async (pageInput: number) => {
+  const loadWhatsHot = useCallback(async (pageInput = 1) => {
     try {
       const res = await fetch(`/api/tokens/hot?limit=20&page=${pageInput}`);
       const data = (await res.json()) as {
@@ -257,8 +257,22 @@ export default function Home() {
     setIsWorking(true);
     setStatus(`Signing ${choice} vote...`);
     try {
-      const nonce = crypto.randomUUID();
-      const issuedAt = new Date().toISOString();
+      const nonceRes = await fetch("/api/auth/nonce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet: connectedWallet.toLowerCase() }),
+      });
+      const nonceData = await nonceRes.json();
+      if (!nonceRes.ok) {
+        throw new Error(nonceData.error ?? "Failed to issue nonce.");
+      }
+
+      const nonce = String(nonceData.nonce ?? "");
+      const issuedAt = String(nonceData.issuedAt ?? "");
+      if (!nonce || !issuedAt) {
+        throw new Error("Nonce response is invalid.");
+      }
+
       const message =
         "ValidToken Vote\n\n" +
         `Token: ${chain}:${normalizedAddress}\n` +

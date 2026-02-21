@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { registerToken } from "@/lib/dev-store";
 import { isChain, isEvmAddress, normalizeAddress } from "@/lib/token";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 type RegisterBody = {
   chain?: string;
@@ -8,6 +9,23 @@ type RegisterBody = {
 };
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const limitResult = checkRateLimit({
+    key: `tokens:register:${ip}`,
+    limit: 30,
+    windowMs: 60_000,
+  });
+
+  if (!limitResult.allowed) {
+    return NextResponse.json(
+      { error: "Too many register requests. Try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limitResult.retryAfterSeconds) },
+      },
+    );
+  }
+
   const body = (await req.json().catch(() => ({}))) as RegisterBody;
   const chain = body.chain;
   const address = body.address;
