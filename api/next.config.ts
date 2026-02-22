@@ -3,6 +3,7 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const PROJECT_ID_KEY = "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID";
+const X_ACCOUNT_KEY = "NEXT_PUBLIC_X_ACCOUNT";
 
 function env(key: string): string | undefined {
   return process.env[key];
@@ -35,10 +36,14 @@ const rootEnvPath = path.join(workspaceRoot, ".env");
 const fallbackProjectId =
   env(PROJECT_ID_KEY) ??
   readEnvValue(rootEnvPath, PROJECT_ID_KEY);
+const fallbackXAccount =
+  env(X_ACCOUNT_KEY) ??
+  readEnvValue(rootEnvPath, X_ACCOUNT_KEY);
 
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: fallbackProjectId,
+    NEXT_PUBLIC_X_ACCOUNT: fallbackXAccount,
   },
 };
 

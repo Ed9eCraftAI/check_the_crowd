@@ -1,18 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
 import { env } from "@/lib/env";
 import Image from "next/image";
+import { buildVoteSigningMessage } from "@/lib/sign-message";
+import type { VoteChoice } from "@/lib/token";
 
 type Chain = "eth" | "bsc";
-type VoteChoice = "valid" | "risky" | "unknown";
 type Consensus = {
   total: number;
-  valid: number;
-  risky: number;
-  unknown: number;
-  label: "VALID" | "RISKY" | "UNKNOWN";
+  appearsLegit: number;
+  suspicious: number;
+  unclear: number;
+  label: VoteChoice;
 };
 type HotItem = {
   chain: Chain;
@@ -24,10 +25,10 @@ type HotItem = {
 
 const EMPTY_CONSENSUS: Consensus = {
   total: 0,
-  valid: 0,
-  risky: 0,
-  unknown: 0,
-  label: "UNKNOWN",
+  appearsLegit: 0,
+  suspicious: 0,
+  unclear: 0,
+  label: "unclear",
 };
 
 const CHAIN_ID_BY_KEY: Record<Chain, number> = {
@@ -38,6 +39,31 @@ const CHAIN_ID_BY_KEY: Record<Chain, number> = {
 const CHAIN_ICON_BY_KEY: Record<Chain, string> = {
   eth: "/chains/eth.svg",
   bsc: "/chains/bsc.svg",
+};
+
+const VOTE_UI: Record<
+  VoteChoice,
+  {
+    label: string;
+    icon: string;
+    emoji: string;
+  }
+> = {
+  appears_legit: {
+    label: "Appears Legit",
+    icon: "/icons/vote-appears-legit.svg",
+    emoji: "🟢",
+  },
+  suspicious: {
+    label: "Suspicious",
+    icon: "/icons/vote-suspicious.svg",
+    emoji: "🟠",
+  },
+  unclear: {
+    label: "Unclear",
+    icon: "/icons/vote-unclear.svg",
+    emoji: "⚪",
+  },
 };
 
 function shortAddress(address: string) {
@@ -75,7 +101,15 @@ export default function Home() {
   const [hotTotalPages, setHotTotalPages] = useState(1);
   const [activeHotKey, setActiveHotKey] = useState<string | null>(null);
   const [loadingHotKey, setLoadingHotKey] = useState<string | null>(null);
-  const [status, setStatus] = useState("");
+  const setStatus: (message: string) => void = () => {};
+  const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(false);
+  const [isChangeVoteModalOpen, setIsChangeVoteModalOpen] = useState(false);
+  const [pendingVoteChoice, setPendingVoteChoice] = useState<VoteChoice | null>(null);
+  const [existingVoteChoice, setExistingVoteChoice] = useState<VoteChoice | null>(null);
+  const [isCopiedToastVisible, setIsCopiedToastVisible] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const walletMenuRef = useRef<HTMLDivElement | null>(null);
+  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { address: connectedWallet, isConnected } = useAccount();
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -86,9 +120,17 @@ export default function Home() {
     [tokenAddress],
   );
   const projectId = env("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID");
+  const xAccount = env("NEXT_PUBLIC_X_ACCOUNT");
+  const xProfileUrl = useMemo(() => {
+    if (!xAccount) return null;
+    const normalized = xAccount.trim().replace(/^@/, "");
+    if (!normalized) return null;
+    return `https://x.com/${normalized}`;
+  }, [xAccount]);
 
   useEffect(() => {
     setConsensus(EMPTY_CONSENSUS);
+    setLastUpdatedAt(null);
   }, [chain, normalizedAddress]);
 
   useEffect(() => {
@@ -98,6 +140,25 @@ export default function Home() {
       preview: projectId ? `${projectId.slice(0, 4)}...` : null,
     });
   }, [projectId]);
+
+  useEffect(() => {
+    if (!isConnected) {
+      setIsWalletMenuOpen(false);
+      return;
+    }
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (!walletMenuRef.current) return;
+      if (!walletMenuRef.current.contains(event.target as Node)) {
+        setIsWalletMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [isConnected]);
 
   const loadWhatsHot = useCallback(async (pageInput = 1) => {
     try {
@@ -214,6 +275,7 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Check failed");
       setConsensus(data.consensus as Consensus);
+      setLastUpdatedAt(new Date());
       setStatus("Consensus updated.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Check failed.";
@@ -237,6 +299,7 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Check failed");
       setConsensus(data.consensus as Consensus);
+      setLastUpdatedAt(new Date());
       setStatus("Consensus updated.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Check failed.";
@@ -248,7 +311,73 @@ export default function Home() {
     }
   }
 
-  async function vote(choice: VoteChoice) {
+  useEffect(() => {
+    if (!/^0x[a-f0-9]{40}$/i.test(normalizedAddress)) return;
+
+    const intervalId = window.setInterval(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/tokens/${chain}/${normalizedAddress}`);
+          const data = await res.json();
+          if (!res.ok) return;
+          setConsensus(data.consensus as Consensus);
+          setLastUpdatedAt(new Date());
+        } catch {
+          // Ignore polling failures and keep last successful state.
+        }
+      })();
+    }, 120000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [chain, normalizedAddress]);
+
+  const getExistingVoteChoice = useCallback(async (): Promise<VoteChoice | null> => {
+    if (!connectedWallet || !normalizedAddress) return null;
+
+    const res = await fetch(
+      `/api/votes?chain=${chain}&address=${normalizedAddress}&wallet=${connectedWallet.toLowerCase()}`,
+    );
+    const data = (await res.json()) as {
+      vote?: {
+        choice?: VoteChoice;
+      } | null;
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error ?? "Failed to load existing vote.");
+    }
+
+    return data.vote?.choice ?? null;
+  }, [chain, connectedWallet, normalizedAddress]);
+
+  useEffect(() => {
+    if (!connectedWallet || !normalizedAddress) {
+      setExistingVoteChoice(null);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const choice = await getExistingVoteChoice();
+        if (!cancelled) {
+          setExistingVoteChoice(choice);
+        }
+      } catch {
+        if (!cancelled) {
+          setExistingVoteChoice(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connectedWallet, normalizedAddress, getExistingVoteChoice]);
+
+  async function submitVote(choice: VoteChoice) {
     if (!connectedWallet) {
       setStatus("Connect wallet first.");
       return;
@@ -269,17 +398,21 @@ export default function Home() {
 
       const nonce = String(nonceData.nonce ?? "");
       const issuedAt = String(nonceData.issuedAt ?? "");
-      if (!nonce || !issuedAt) {
+      const expiresAt = String(nonceData.expiresAt ?? "");
+      if (!nonce || !issuedAt || !expiresAt) {
         throw new Error("Nonce response is invalid.");
       }
 
-      const message =
-        "ValidToken Vote\n\n" +
-        `Token: ${chain}:${normalizedAddress}\n` +
-        `Choice: ${choice}\n` +
-        `Wallet: ${connectedWallet.toLowerCase()}\n` +
-        `Nonce: ${nonce}\n` +
-        `IssuedAt: ${issuedAt}`;
+      const message = buildVoteSigningMessage({
+        domain: window.location.host,
+        chain,
+        address: normalizedAddress,
+        choice,
+        wallet: connectedWallet.toLowerCase(),
+        nonce,
+        issuedAt,
+        expiresAt,
+      });
 
       const signature = await signMessageAsync({ message });
 
@@ -292,7 +425,6 @@ export default function Home() {
           wallet: connectedWallet.toLowerCase(),
           choice,
           nonce,
-          issuedAt,
           signature,
           message,
         }),
@@ -300,9 +432,10 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Vote failed");
 
-      setStatus(`Vote submitted: ${choice}`);
+      setStatus(`Vote submitted: ${VOTE_UI[choice].label}`);
       await loadWhatsHot();
       await checkToken();
+      setExistingVoteChoice(choice);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Vote failed.";
       setStatus(message);
@@ -311,30 +444,100 @@ export default function Home() {
     }
   }
 
+  async function copyTokenAddress() {
+    if (!normalizedAddress) return;
+
+    await navigator.clipboard.writeText(normalizedAddress);
+    setIsCopiedToastVisible(true);
+
+    if (copyToastTimerRef.current) {
+      clearTimeout(copyToastTimerRef.current);
+    }
+    copyToastTimerRef.current = setTimeout(() => {
+      setIsCopiedToastVisible(false);
+    }, 1500);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (copyToastTimerRef.current) {
+        clearTimeout(copyToastTimerRef.current);
+      }
+    };
+  }, []);
+
+  async function vote(choice: VoteChoice) {
+    if (!connectedWallet) {
+      setStatus("Connect wallet first.");
+      return;
+    }
+
+    if (!normalizedAddress) {
+      setStatus("Enter token address first.");
+      return;
+    }
+
+    try {
+      const existingChoice = await getExistingVoteChoice();
+      if (existingChoice && existingChoice !== choice) {
+        setPendingVoteChoice(choice);
+        setIsChangeVoteModalOpen(true);
+        return;
+      }
+    } catch {
+      // Ignore lookup failures and proceed with vote flow.
+    }
+
+    await submitVote(choice);
+  }
+
   const voteTotal = Math.max(consensus.total, 1);
   const voteRows = [
     {
-      key: "valid" as const,
-      label: "VALID",
-      count: consensus.valid,
+      key: "appears_legit" as const,
+      label: VOTE_UI.appears_legit.label,
+      icon: VOTE_UI.appears_legit.icon,
+      count: consensus.appearsLegit,
       barClass: "bg-emerald-500",
       buttonClass: "bg-emerald-600 hover:bg-emerald-700",
     },
     {
-      key: "risky" as const,
-      label: "RISKY",
-      count: consensus.risky,
-      barClass: "bg-rose-500",
-      buttonClass: "bg-rose-600 hover:bg-rose-700",
+      key: "suspicious" as const,
+      label: VOTE_UI.suspicious.label,
+      icon: VOTE_UI.suspicious.icon,
+      count: consensus.suspicious,
+      barClass: "bg-orange-500",
+      buttonClass: "bg-orange-600 hover:bg-orange-700",
     },
     {
-      key: "unknown" as const,
-      label: "UNKNOWN",
-      count: consensus.unknown,
-      barClass: "bg-sky-600",
-      buttonClass: "bg-sky-700 hover:bg-sky-800",
+      key: "unclear" as const,
+      label: VOTE_UI.unclear.label,
+      icon: VOTE_UI.unclear.icon,
+      count: consensus.unclear,
+      barClass: "bg-zinc-500",
+      buttonClass: "bg-zinc-600 hover:bg-zinc-700",
     },
   ];
+  const consensusChoice = consensus.label;
+  const consensusUi = VOTE_UI[consensusChoice];
+  const dominantCountByChoice: Record<VoteChoice, number> = {
+    appears_legit: consensus.appearsLegit,
+    suspicious: consensus.suspicious,
+    unclear: consensus.unclear,
+  };
+  const calcPercent = (count: number) =>
+    consensus.total > 0 ? Math.round((count / consensus.total) * 100) : 0;
+  const dominantPercent = calcPercent(dominantCountByChoice[consensusChoice]);
+  const appearsLegitPercent = calcPercent(consensus.appearsLegit);
+  const suspiciousPercent = calcPercent(consensus.suspicious);
+  const unclearPercent = calcPercent(consensus.unclear);
+  const voteCountLabel = `${consensus.total} ${consensus.total === 1 ? "vote" : "votes"}`;
+  const communitySignalText =
+    consensus.total > 5
+      ? dominantPercent >= 70
+        ? `Community leaning: ${consensusUi.emoji} ${consensusUi.label} (${dominantPercent}%, ${voteCountLabel})`
+        : `Community split (🟢 ${appearsLegitPercent}% · 🟠 ${suspiciousPercent}% · ⚪ ${unclearPercent}%, ${voteCountLabel})`
+      : `Not enough data yet (${voteCountLabel})`;
 
   return (
     <div className="min-h-screen bg-[linear-gradient(135deg,#f7efe2_0%,#f0f4f8_55%,#e6efff_100%)] px-4 py-10 text-zinc-900">
@@ -342,36 +545,45 @@ export default function Home() {
         <section className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-3xl font-bold tracking-tight">Check The Crowd</h1>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              onClick={connectWallet}
-              disabled={isWorking || isPending}
-              className="rounded-xl bg-amber-600 px-4 py-2 text-white disabled:opacity-50"
-            >
-              Connect Wallet (QR)
-            </button>
-            {isConnected && (
+            {!isConnected ? (
               <button
-                onClick={() => {
-                  disconnect();
-                  clearWalletConnectStorage();
-                  setStatus("Wallet disconnected.");
-                }}
-                className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-zinc-800"
+                onClick={connectWallet}
+                disabled={isWorking || isPending}
+                className="rounded-xl bg-amber-600 px-4 py-2 text-white disabled:opacity-50"
               >
-                Disconnect
+                Connect Wallet (QR)
               </button>
+            ) : (
+              <div ref={walletMenuRef} className="relative">
+                <button
+                  onClick={() => setIsWalletMenuOpen((prev) => !prev)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700"
+                >
+                  <Image src="/icons/wallet.svg" alt="Wallet" width={16} height={16} />
+                  {connectedWallet ? shortAddress(connectedWallet) : "-"}
+                </button>
+                {isWalletMenuOpen && (
+                  <div className="absolute right-0 top-[calc(100%+8px)] z-10 w-36 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
+                    <button
+                      onClick={() => {
+                        disconnect();
+                        clearWalletConnectStorage();
+                        setIsWalletMenuOpen(false);
+                        setStatus("Wallet disconnected.");
+                      }}
+                      className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm text-white"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
-            <span className="text-sm text-zinc-700">
-              {connectedWallet
-                ? `Wallet: ${shortAddress(connectedWallet)}`
-                : "Wallet not connected"}
-            </span>
           </div>
         </section>
-        <p className="mt-2 text-sm text-zinc-600">
+        <p className="mt-2 text-[16px] font-bold text-zinc-600">
           Community consensus only. Not financial advice.
         </p>
-        <p className="mt-2 min-h-5 text-sm text-zinc-700">{status}</p>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-[120px_1fr_auto_auto]">
           <div className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-2">
@@ -513,7 +725,20 @@ export default function Home() {
 
         <section className="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
           <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-            <div className="text-xs font-semibold tracking-wide text-zinc-500">VOTING TOKEN</div>
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold tracking-wide text-zinc-500">VOTING TOKEN</div>
+              <button
+                onClick={() => {
+                  void copyTokenAddress();
+                }}
+                disabled={!normalizedAddress}
+                aria-label="Copy token address"
+                title="Copy token address"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 text-zinc-700 disabled:opacity-40"
+              >
+                <Image src="/icons/copy.svg" alt="Copy" width={14} height={14} />
+              </button>
+            </div>
             <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-zinc-900">
               <Image
                 src={CHAIN_ICON_BY_KEY[chain]}
@@ -533,9 +758,7 @@ export default function Home() {
 
           <div className="mt-4 flex items-center justify-between text-sm">
             <div className="font-semibold text-zinc-800">Consensus</div>
-            <div className="text-zinc-600">
-              Total {consensus.total} · Label <span className="font-semibold">{consensus.label}</span>
-            </div>
+            <div className="text-zinc-700">{communitySignalText}</div>
           </div>
 
           <div className="mt-3 space-y-3">
@@ -546,7 +769,10 @@ export default function Home() {
                 <div key={row.key} className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
                   <div>
                     <div className="mb-1 flex items-center justify-between text-xs font-medium text-zinc-700">
-                      <span>{row.label}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Image src={row.icon} alt={row.label} width={12} height={12} />
+                        {row.label}
+                      </span>
                       <span>
                         {row.count} ({percent}%)
                       </span>
@@ -560,18 +786,92 @@ export default function Home() {
                   </div>
                   <button
                     onClick={() => vote(row.key)}
-                    disabled={isWorking}
-                    className={`h-11 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${row.buttonClass}`}
+                    disabled={isWorking || existingVoteChoice === row.key}
+                    className={`h-11 w-24 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${row.buttonClass}`}
                   >
-                    Vote
+                    {existingVoteChoice === row.key ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Image src="/icons/check.svg" alt="Voted" width={14} height={14} />
+                        Voted
+                      </span>
+                    ) : (
+                      "Vote"
+                    )}
                   </button>
                 </div>
               );
             })}
           </div>
+          <p className="mt-4 text-sm text-zinc-600">
+            <span className="font-semibold">One wallet, one vote. </span>Signature-based verification.
+          </p>
+          <div className="mt-2 flex justify-end">
+            <span className="text-xs text-zinc-500">
+              Last updated:{" "}
+              {lastUpdatedAt
+                ? lastUpdatedAt.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "-"}
+            </span>
+          </div>
         </section>
 
       </main>
+      {xProfileUrl && (
+        <a
+          href={xProfileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="group fixed bottom-6 left-1/2 z-20 inline-flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-xl border border-zinc-300 bg-white text-zinc-900 shadow"
+          title={`X: @${xAccount?.replace(/^@/, "")}`}
+          aria-label="Open X profile"
+        >
+          <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+            Follow updates on X
+          </span>
+          <Image src="/icons/x-logo.svg" alt="X" width={16} height={16} />
+        </a>
+      )}
+      {isCopiedToastVisible && (
+        <div className="fixed left-1/2 top-1/2 z-40 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-lg">
+          Copied
+        </div>
+      )}
+      {isChangeVoteModalOpen && pendingVoteChoice && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-zinc-900">Change vote?</h2>
+            <p className="mt-2 text-sm text-zinc-600">
+              You already voted for this token. Confirm to replace your vote with{" "}
+              <span className="font-semibold">{VOTE_UI[pendingVoteChoice].label}</span>.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setIsChangeVoteModalOpen(false);
+                  setPendingVoteChoice(null);
+                }}
+                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setIsChangeVoteModalOpen(false);
+                  const nextChoice = pendingVoteChoice;
+                  setPendingVoteChoice(null);
+                  void submitVote(nextChoice);
+                }}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

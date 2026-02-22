@@ -30,15 +30,26 @@ export async function issueVoteNonce(walletInput: string) {
 }
 
 export async function consumeVoteNonce(input: {
+  nonceId: string;
+}) {
+  const result = await prisma.nonce.updateMany({
+    where: {
+      id: input.nonceId,
+      usedAt: null,
+    },
+    data: {
+      usedAt: new Date(),
+    },
+  });
+
+  return result.count === 1;
+}
+
+export async function getActiveVoteNonce(input: {
   wallet: string;
   nonce: string;
-  issuedAt: string;
 }) {
   const wallet = normalizeAddress(input.wallet);
-  const issuedAt = new Date(input.issuedAt);
-
-  if (Number.isNaN(issuedAt.getTime())) return false;
-
   const nonceRecord = await prisma.nonce.findUnique({
     where: {
       wallet_nonce: {
@@ -54,22 +65,15 @@ export async function consumeVoteNonce(input: {
     },
   });
 
-  if (!nonceRecord) return false;
-  if (nonceRecord.usedAt) return false;
-  if (nonceRecord.expiresAt.getTime() <= Date.now()) return false;
-  if (nonceRecord.issuedAt.getTime() !== issuedAt.getTime()) return false;
+  if (!nonceRecord) return null;
+  if (nonceRecord.usedAt) return null;
+  if (nonceRecord.expiresAt.getTime() <= Date.now()) return null;
 
-  const result = await prisma.nonce.updateMany({
-    where: {
-      id: nonceRecord.id,
-      usedAt: null,
-    },
-    data: {
-      usedAt: new Date(),
-    },
-  });
-
-  return result.count === 1;
+  return {
+    id: nonceRecord.id,
+    issuedAt: nonceRecord.issuedAt.toISOString(),
+    expiresAt: nonceRecord.expiresAt.toISOString(),
+  };
 }
 
 export async function registerToken(chain: Chain, addressInput: string) {
@@ -117,10 +121,10 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
       token: { chain, address },
       consensus: {
         total: 0,
-        valid: 0,
-        risky: 0,
-        unknown: 0,
-        label: "UNKNOWN" as const,
+        appearsLegit: 0,
+        suspicious: 0,
+        unclear: 0,
+        label: "unclear" as const,
       },
     };
   }
@@ -134,19 +138,23 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
     },
   });
 
-  const valid = votes.filter((vote) => vote.choice === "valid").length;
-  const risky = votes.filter((vote) => vote.choice === "risky").length;
-  const unknown = votes.filter((vote) => vote.choice === "unknown").length;
+  const appearsLegit = votes.filter(
+    (vote) => vote.choice === "appears_legit",
+  ).length;
+  const suspicious = votes.filter(
+    (vote) => vote.choice === "suspicious",
+  ).length;
+  const unclear = votes.filter((vote) => vote.choice === "unclear").length;
   const total = votes.length;
 
   return {
     token: { chain, address },
     consensus: {
       total,
-      valid,
-      risky,
-      unknown,
-      label: toConsensusLabel(valid, risky, unknown),
+      appearsLegit,
+      suspicious,
+      unclear,
+      label: toConsensusLabel(appearsLegit, suspicious, unclear),
     },
   };
 }
@@ -210,6 +218,53 @@ export async function upsertVote(input: {
     signature: vote.signature,
     message: vote.message,
     createdAt: vote.createdAt.toISOString(),
+    updatedAt: vote.updatedAt.toISOString(),
+  };
+}
+
+export async function getWalletVote(input: {
+  chain: Chain;
+  address: string;
+  wallet: string;
+}) {
+  const address = normalizeAddress(input.address);
+  const wallet = normalizeAddress(input.wallet);
+
+  const token = await prisma.token.findUnique({
+    where: {
+      chain_address: {
+        chain: input.chain,
+        address,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!token) {
+    return null;
+  }
+
+  const vote = await prisma.vote.findUnique({
+    where: {
+      tokenId_voterWallet: {
+        tokenId: token.id,
+        voterWallet: wallet,
+      },
+    },
+    select: {
+      choice: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!vote) {
+    return null;
+  }
+
+  return {
+    choice: vote.choice as VoteChoice,
     updatedAt: vote.updatedAt.toISOString(),
   };
 }

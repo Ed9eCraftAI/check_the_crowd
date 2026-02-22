@@ -20,9 +20,9 @@ enum Chain {
 }
 
 enum VoteChoice {
-  valid
-  risky
-  unknown
+  appears_legit
+  suspicious
+  unclear
 }
 
 model Token {

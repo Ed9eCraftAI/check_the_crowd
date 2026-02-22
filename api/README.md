@@ -37,7 +37,7 @@ curl -X POST http://localhost:3000/api/votes \
     "chain":"eth",
     "address":"0x1111111111111111111111111111111111111111",
     "wallet":"0x2222222222222222222222222222222222222222",
-    "choice":"risky",
+    "choice":"suspicious",
     "signature":"dev-signature",
     "message":"dev-message"
   }'

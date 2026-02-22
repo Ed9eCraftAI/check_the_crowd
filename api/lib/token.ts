@@ -1,5 +1,5 @@
 export type Chain = "eth" | "bsc";
-export type VoteChoice = "valid" | "risky" | "unknown";
+export type VoteChoice = "appears_legit" | "suspicious" | "unclear";
 
 export type TokenRecord = {
   chain: Chain;
@@ -38,17 +38,19 @@ export function normalizeAddress(value: string): string {
 }
 
 export function toConsensusLabel(
-  valid: number,
-  risky: number,
-  unknown: number,
-): "VALID" | "RISKY" | "UNKNOWN" {
-  const max = Math.max(valid, risky, unknown);
+  appearsLegit: number,
+  suspicious: number,
+  unclear: number,
+): VoteChoice {
+  const max = Math.max(appearsLegit, suspicious, unclear);
 
-  if (max === 0) return "UNKNOWN";
+  if (max === 0) return "unclear";
 
-  const winners = [valid, risky, unknown].filter((count) => count === max).length;
-  if (winners > 1) return "UNKNOWN";
-  if (max === valid) return "VALID";
-  if (max === risky) return "RISKY";
-  return "UNKNOWN";
+  const winners = [appearsLegit, suspicious, unclear].filter(
+    (count) => count === max,
+  ).length;
+  if (winners > 1) return "unclear";
+  if (max === appearsLegit) return "appears_legit";
+  if (max === suspicious) return "suspicious";
+  return "unclear";
 }

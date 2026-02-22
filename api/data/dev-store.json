@@ -11,7 +11,7 @@
       "chain": "eth",
       "address": "0x1111111111111111111111111111111111111111",
       "voterWallet": "0x2222222222222222222222222222222222222222",
-      "choice": "risky",
+      "choice": "suspicious",
       "signature": "dev-signature",
       "message": "dev-message",
       "createdAt": "2026-02-19T07:05:50.252Z",
