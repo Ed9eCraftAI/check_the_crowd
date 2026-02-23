@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import type { Chain, VoteChoice } from "@/lib/token";
 import { hashWalletAddress, normalizeAddress, toConsensusLabel } from "@/lib/token";
+
+type TransactionClient = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
+>;
 
 const VOTE_NONCE_TTL_MS = 5 * 60 * 1000;
 
@@ -176,7 +181,7 @@ export async function upsertVote(input: {
   const address = normalizeAddress(input.address);
   const walletHash = hashWalletAddress(input.wallet);
 
-  const vote = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  const vote = await prisma.$transaction(async (tx: TransactionClient) => {
     const token = await tx.token.upsert({
       where: {
         chain_address: {
