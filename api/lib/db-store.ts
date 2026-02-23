@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
 import type { Chain, VoteChoice } from "@/lib/token";
 import { hashWalletAddress, normalizeAddress, toConsensusLabel } from "@/lib/token";
 
-type TransactionClient = Omit<
-  PrismaClient,
-  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
+type InteractiveTxFn = Extract<
+  Parameters<typeof prisma.$transaction>[0],
+  (tx: unknown) => unknown
 >;
+type TransactionClient = Parameters<InteractiveTxFn>[0];
 
 const VOTE_NONCE_TTL_MS = 5 * 60 * 1000;
 
