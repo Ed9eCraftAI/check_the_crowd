@@ -31,11 +31,6 @@ const EMPTY_CONSENSUS: Consensus = {
   label: "unclear",
 };
 
-const CHAIN_ID_BY_KEY: Record<Chain, number> = {
-  eth: 1,
-  bsc: 56,
-};
-
 const CHAIN_ICON_BY_KEY: Record<Chain, string> = {
   eth: "/chains/eth.svg",
   bsc: "/chains/bsc.svg",
@@ -108,6 +103,7 @@ export default function Home() {
   const [isChangeVoteModalOpen, setIsChangeVoteModalOpen] = useState(false);
   const [connectErrorMessage, setConnectErrorMessage] = useState<string | null>(null);
   const [voteErrorMessage, setVoteErrorMessage] = useState<string | null>(null);
+  const [checkErrorMessage, setCheckErrorMessage] = useState<string | null>(null);
   const [pendingVoteChoice, setPendingVoteChoice] = useState<VoteChoice | null>(null);
   const [existingVoteChoice, setExistingVoteChoice] = useState<VoteChoice | null>(null);
   const [isCopiedToastVisible, setIsCopiedToastVisible] = useState(false);
@@ -180,10 +176,9 @@ export default function Home() {
     void loadWhatsHot(1);
   }, [loadWhatsHot]);
 
-  async function connectWallet() {
+async function connectWallet() {
     setIsWorking(true);
     setStatus("Connecting wallet...");
-    const targetChainId = CHAIN_ID_BY_KEY[chain];
     try {
       const walletConnectConnector = connectors.find(
         (connector) =>
@@ -191,26 +186,10 @@ export default function Home() {
           connector.name.toLowerCase().includes("walletconnect"),
       );
 
-      const connectWithFallback = async (
-        connector: (typeof connectors)[number],
-      ) => {
-        try {
-          return await connectAsync({ connector, chainId: targetChainId });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          const isChainSwitchIssue =
-            message.includes("Chain not configured") ||
-            message.includes("attempting to switch chain");
-
-          if (!isChainSwitchIssue) throw error;
-          return await connectAsync({ connector });
-        }
-      };
-
       const injectedConnector = connectors.find((connector) => connector.id === "injected");
       if (injectedConnector) {
         try {
-          const result = await connectWithFallback(injectedConnector);
+          const result = await connectAsync({ connector: injectedConnector });
           setStatus(`Injected wallet connected: ${shortAddress(result.accounts[0])}`);
           return;
         } catch {
@@ -219,7 +198,7 @@ export default function Home() {
       }
 
       if (projectId && walletConnectConnector) {
-        const result = await connectWithFallback(walletConnectConnector);
+        const result = await connectAsync({ connector: walletConnectConnector });
         setStatus(`WalletConnect connected: ${shortAddress(result.accounts[0])}`);
         return;
       }
@@ -237,6 +216,16 @@ export default function Home() {
   }
 
   async function checkToken() {
+    if (!normalizedAddress) {
+      setCheckErrorMessage("Enter token address first.");
+      return;
+    }
+
+    if (!/^0x[a-f0-9]{40}$/i.test(normalizedAddress)) {
+      setCheckErrorMessage("Invalid token address format. Use a valid EVM address.");
+      return;
+    }
+
     setIsWorking(true);
     setStatus("Loading consensus...");
     try {
@@ -862,6 +851,22 @@ export default function Home() {
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setVoteErrorMessage(null)}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {checkErrorMessage && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-zinc-900">Invalid Address</h2>
+            <p className="mt-2 text-sm text-zinc-600">{checkErrorMessage}</p>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setCheckErrorMessage(null)}
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white"
               >
                 Close
