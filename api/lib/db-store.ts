@@ -8,6 +8,21 @@ type InteractiveTxFn = Extract<
   (tx: unknown) => unknown
 >;
 type TransactionClient = Parameters<InteractiveTxFn>[0];
+type HotTokenQueryRow = {
+  chain: Chain;
+  address: string;
+  createdAt: Date;
+  _count: {
+    votes: number;
+  };
+};
+type HotTokenComputedRow = {
+  chain: Chain;
+  address: string;
+  createdAt: string;
+  voteCount: number;
+  isNew: boolean;
+};
 
 const VOTE_NONCE_TTL_MS = 5 * 60 * 1000;
 
@@ -327,15 +342,15 @@ export async function getWhatsHotTokens(limitInput = 20, pageInput = 1) {
     },
   });
 
-  const sorted = tokens
-    .map((token) => ({
+  const sorted = (tokens as HotTokenQueryRow[])
+    .map((token: HotTokenQueryRow): HotTokenComputedRow => ({
       chain: token.chain,
       address: token.address,
       createdAt: token.createdAt.toISOString(),
       voteCount: token._count.votes,
       isNew: token.createdAt >= since,
     }))
-    .sort((a, b) => {
+    .sort((a: HotTokenComputedRow, b: HotTokenComputedRow) => {
       if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
       const addressCompare = a.address.localeCompare(b.address);
       if (addressCompare !== 0) return addressCompare;
@@ -349,7 +364,7 @@ export async function getWhatsHotTokens(limitInput = 20, pageInput = 1) {
   const paged = sorted.slice(start, start + limit);
 
   return {
-    items: paged.map((token) => ({
+    items: paged.map((token: HotTokenComputedRow) => ({
       chain: token.chain,
       address: token.address,
       createdAt: token.createdAt,
