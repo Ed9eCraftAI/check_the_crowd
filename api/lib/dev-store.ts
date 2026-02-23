@@ -140,12 +140,14 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
   });
 
   const appearsLegit = votes.filter(
-    (vote) => vote.choice === "appears_legit",
+    (vote: { choice: VoteChoice }) => vote.choice === "appears_legit",
   ).length;
   const suspicious = votes.filter(
-    (vote) => vote.choice === "suspicious",
+    (vote: { choice: VoteChoice }) => vote.choice === "suspicious",
   ).length;
-  const unclear = votes.filter((vote) => vote.choice === "unclear").length;
+  const unclear = votes.filter(
+    (vote: { choice: VoteChoice }) => vote.choice === "unclear",
+  ).length;
   const total = votes.length;
 
   return {

@@ -7,16 +7,17 @@ const projectId = env("CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID");
 const appUrl = env("CHECK_THE_CROWD_APP_URL") ?? "http://localhost:3000";
 
 function buildConnectors() {
-  const base = [injected()];
+  const injectedConnector = injected();
 
   if (typeof window === "undefined") {
-    return base;
+    return [injectedConnector];
   }
 
-  if (!projectId) return base;
+  if (!projectId) return [injectedConnector];
 
   try {
-    base.push(
+    return [
+      injectedConnector,
       walletConnect({
         projectId,
         showQrModal: true,
@@ -27,11 +28,10 @@ function buildConnectors() {
           icons: [],
         },
       }),
-    );
+    ];
   } catch {
+    return [injectedConnector];
   }
-
-  return base;
 }
 
 const connectors = buildConnectors();
