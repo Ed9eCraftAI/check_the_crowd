@@ -119,8 +119,8 @@ export default function Home() {
     () => tokenAddress.trim().toLowerCase(),
     [tokenAddress],
   );
-  const projectId = env("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID");
-  const xAccount = env("NEXT_PUBLIC_X_ACCOUNT");
+  const projectId = env("CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID");
+  const xAccount = env("CHECK_THE_CROWD_X_ACCOUNT");
   const xProfileUrl = useMemo(() => {
     if (!xAccount) return null;
     const normalized = xAccount.trim().replace(/^@/, "");
@@ -216,7 +216,7 @@ export default function Home() {
       }
 
       throw new Error(
-        "No compatible connector found. Install wallet extension or set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID.",
+        "No compatible connector found. Install wallet extension or set CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID.",
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Wallet connection failed.";

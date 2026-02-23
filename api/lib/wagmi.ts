@@ -3,7 +3,8 @@ import { bsc, mainnet } from "wagmi/chains";
 import { injected, walletConnect } from "wagmi/connectors";
 import { env } from "@/lib/env";
 
-const projectId = env("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID");
+const projectId = env("CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID");
+const appUrl = env("CHECK_THE_CROWD_APP_URL") ?? "http://localhost:3000";
 
 function buildConnectors() {
   const base = [injected()];
@@ -22,7 +23,7 @@ function buildConnectors() {
         metadata: {
           name: "ValidToken MVP",
           description: "Community consensus voting app",
-          url: "http://localhost:3000",
+          url: appUrl,
           icons: [],
         },
       }),

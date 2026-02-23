@@ -1,48 +1,91 @@
-## Getting Started
+# CheckTheCrowd API App
 
-Create `.env` (at repository root):
+Next.js app (App Router) for community token consensus voting.
+
+## Requirements
+
+- Node.js 20+
+- PostgreSQL (Supabase supported)
+
+## Environment Variables
+
+Create `.env` at repository root:
 
 ```bash
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="your_project_id"
+DATABASE_URL="postgresql://...@...:6543/postgres?pgbouncer=true&sslmode=require"
+DIRECT_URL="postgresql://...@...:5432/postgres?sslmode=require"
+
+CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID="your_walletconnect_project_id"
+CHECK_THE_CROWD_X_ACCOUNT="@your_x_account"
+CHECK_THE_CROWD_APP_URL="http://localhost:3000"
 ```
 
-Get project id from WalletConnect Cloud.
+Notes:
+- `DATABASE_URL`: runtime connection (pooler recommended).
+- `DIRECT_URL`: Prisma schema/migration connection.
 
-Then run:
+## Local Run
 
 ```bash
+cd api
+npm install
+npm run postinstall
 npm run dev
 ```
 
-## Dev Data Mode (No DB)
+## Schema / Reset
 
-In local development, APIs use `data/dev-store.json` as storage.
-
-- Register token: `POST /api/tokens/register`
-- Vote: `POST /api/votes`
-- Check consensus: `GET /api/tokens/:chain/:address`
-
-Example:
+From repository root:
 
 ```bash
-curl -X POST http://localhost:3000/api/tokens/register \
-  -H "Content-Type: application/json" \
-  -d '{"chain":"eth","address":"0x1111111111111111111111111111111111111111"}'
+npx --prefix api prisma db push --schema=prisma/schema.prisma --force-reset
+cd api && npm run postinstall
 ```
 
-```bash
-curl -X POST http://localhost:3000/api/votes \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chain":"eth",
-    "address":"0x1111111111111111111111111111111111111111",
-    "wallet":"0x2222222222222222222222222222222222222222",
-    "choice":"suspicious",
-    "signature":"dev-signature",
-    "message":"dev-message"
-  }'
-```
+## Vote Choices
 
-```bash
-curl http://localhost:3000/api/tokens/eth/0x1111111111111111111111111111111111111111
-```
+- `appears_legit`
+- `suspicious`
+- `unclear`
+
+## API Endpoints
+
+- `POST /api/auth/nonce`
+  - Request: `{ "wallet": "0x..." }`
+  - Response: `{ walletHash, nonce, issuedAt, expiresAt }`
+
+- `POST /api/tokens/register`
+  - Request: `{ "chain": "eth" | "bsc", "address": "0x..." }`
+
+- `GET /api/tokens/:chain/:address`
+  - Returns token consensus
+
+- `GET /api/tokens/hot?limit=20&page=1`
+  - Returns hot token list with pagination
+
+- `GET /api/votes?chain=...&address=...&wallet=...`
+  - Returns existing vote for a wallet on a token
+
+- `POST /api/votes`
+  - Request fields:
+    - `chain`, `address`, `wallet`, `choice`
+    - `nonce`, `signature`, `message`
+  - Server validates:
+    - signed message format/content
+    - recovered signer address
+    - nonce validity + one-time use
+  - Stores:
+    - latest vote in `Vote`
+    - full history in `VoteHistory`
+
+## Security Notes
+
+- One wallet, one active vote per token (`Vote` unique constraint).
+- Full vote change history stored (`VoteHistory`).
+- Wallet addresses are stored as SHA-256 hash in DB.
+- Rate limiting is applied to nonce/vote/register/read routes.
+
+## Vercel
+
+- Set project Root Directory to `api`.
+- Configure environment variables for both Preview and Production.

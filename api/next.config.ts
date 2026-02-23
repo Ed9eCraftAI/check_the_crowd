@@ -2,8 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { NextConfig } from "next";
 
-const PROJECT_ID_KEY = "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID";
-const X_ACCOUNT_KEY = "NEXT_PUBLIC_X_ACCOUNT";
+const PROJECT_ID_KEY = "CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID";
+const X_ACCOUNT_KEY = "CHECK_THE_CROWD_X_ACCOUNT";
+const APP_URL_KEY = "CHECK_THE_CROWD_APP_URL";
 
 function env(key: string): string | undefined {
   return process.env[key];
@@ -39,11 +40,15 @@ const fallbackProjectId =
 const fallbackXAccount =
   env(X_ACCOUNT_KEY) ??
   readEnvValue(rootEnvPath, X_ACCOUNT_KEY);
+const fallbackAppUrl =
+  env(APP_URL_KEY) ??
+  readEnvValue(rootEnvPath, APP_URL_KEY);
 
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: fallbackProjectId,
-    NEXT_PUBLIC_X_ACCOUNT: fallbackXAccount,
+    CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID: fallbackProjectId,
+    CHECK_THE_CROWD_X_ACCOUNT: fallbackXAccount,
+    CHECK_THE_CROWD_APP_URL: fallbackAppUrl,
   },
 };
 
