@@ -45,6 +45,9 @@ const fallbackAppUrl =
   readEnvValue(rootEnvPath, APP_URL_KEY);
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: process.cwd(),
+  },
   env: {
     CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID: fallbackProjectId,
     CHECK_THE_CROWD_X_ACCOUNT: fallbackXAccount,
