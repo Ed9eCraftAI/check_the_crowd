@@ -3,11 +3,6 @@ import { randomUUID } from "node:crypto";
 import type { Chain, VoteChoice } from "@/lib/token";
 import { hashWalletAddress, normalizeAddress, toConsensusLabel } from "@/lib/token";
 
-type InteractiveTxFn = Extract<
-  Parameters<typeof prisma.$transaction>[0],
-  (tx: unknown) => unknown
->;
-type TransactionClient = Parameters<InteractiveTxFn>[0];
 type HotTokenQueryRow = {
   chain: Chain;
   address: string;
@@ -161,14 +156,12 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
   });
 
   const appearsLegit = votes.filter(
-    (vote: { choice: VoteChoice }) => vote.choice === "appears_legit",
+    (vote) => String(vote.choice) === "appears_legit",
   ).length;
   const suspicious = votes.filter(
-    (vote: { choice: VoteChoice }) => vote.choice === "suspicious",
+    (vote) => String(vote.choice) === "suspicious",
   ).length;
-  const unclear = votes.filter(
-    (vote: { choice: VoteChoice }) => vote.choice === "unclear",
-  ).length;
+  const unclear = votes.filter((vote) => String(vote.choice) === "unclear").length;
   const total = votes.length;
 
   return {
@@ -196,7 +189,8 @@ export async function upsertVote(input: {
   const address = normalizeAddress(input.address);
   const walletHash = hashWalletAddress(input.wallet);
 
-  const vote = await prisma.$transaction(async (tx: TransactionClient) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vote = await prisma.$transaction(async (tx: any) => {
     const token = await tx.token.upsert({
       where: {
         chain_address: {
