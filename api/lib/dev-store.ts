@@ -118,6 +118,7 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
 
   if (!token) {
     return {
+      exists: false,
       token: { chain, address },
       consensus: {
         total: 0,
@@ -148,6 +149,7 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
   const total = votes.length;
 
   return {
+    exists: true,
     token: { chain, address },
     consensus: {
       total,

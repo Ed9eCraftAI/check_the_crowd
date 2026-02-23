@@ -27,7 +27,8 @@ type VoteBody = {
 
 const VOTE_CHOICES: VoteChoice[] = ["appears_legit", "suspicious", "unclear"];
 const MAX_MESSAGE_LENGTH = 500;
-const SIGNATURE_REGEX = /^0x[0-9a-fA-F]{130}$/;
+const SIGNATURE_REGEX = /^0x[0-9a-f]+$/i;
+const MAX_SIGNATURE_LENGTH = 4096;
 
 function getRequestDomain(req: Request): string {
   const forwardedHost = req.headers.get("x-forwarded-host");
@@ -102,6 +103,12 @@ export async function POST(req: Request) {
   if (!SIGNATURE_REGEX.test(signature)) {
     return NextResponse.json(
       { error: "Invalid signature format." },
+      { status: 400 },
+    );
+  }
+  if (signature.length < 10 || signature.length > MAX_SIGNATURE_LENGTH) {
+    return NextResponse.json(
+      { error: "Invalid signature length." },
       { status: 400 },
     );
   }

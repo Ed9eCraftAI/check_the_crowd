@@ -103,7 +103,11 @@ export default function Home() {
   const [loadingHotKey, setLoadingHotKey] = useState<string | null>(null);
   const setStatus: (message: string) => void = () => {};
   const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(false);
+  const [isConnectVoteModalOpen, setIsConnectVoteModalOpen] = useState(false);
+  const [isRegisterSuggestionModalOpen, setIsRegisterSuggestionModalOpen] = useState(false);
   const [isChangeVoteModalOpen, setIsChangeVoteModalOpen] = useState(false);
+  const [connectErrorMessage, setConnectErrorMessage] = useState<string | null>(null);
+  const [voteErrorMessage, setVoteErrorMessage] = useState<string | null>(null);
   const [pendingVoteChoice, setPendingVoteChoice] = useState<VoteChoice | null>(null);
   const [existingVoteChoice, setExistingVoteChoice] = useState<VoteChoice | null>(null);
   const [isCopiedToastVisible, setIsCopiedToastVisible] = useState(false);
@@ -131,6 +135,7 @@ export default function Home() {
   useEffect(() => {
     setConsensus(EMPTY_CONSENSUS);
     setLastUpdatedAt(null);
+    setIsRegisterSuggestionModalOpen(false);
   }, [chain, normalizedAddress]);
 
   useEffect(() => {
@@ -204,9 +209,13 @@ export default function Home() {
 
       const injectedConnector = connectors.find((connector) => connector.id === "injected");
       if (injectedConnector) {
-        const result = await connectWithFallback(injectedConnector);
-        setStatus(`Injected wallet connected: ${shortAddress(result.accounts[0])}`);
-        return;
+        try {
+          const result = await connectWithFallback(injectedConnector);
+          setStatus(`Injected wallet connected: ${shortAddress(result.accounts[0])}`);
+          return;
+        } catch {
+          // If injected wallet is unavailable, try WalletConnect next.
+        }
       }
 
       if (projectId && walletConnectConnector) {
@@ -221,30 +230,7 @@ export default function Home() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Wallet connection failed.";
       setStatus(message);
-    } finally {
-      setIsWorking(false);
-    }
-  }
-
-  async function registerToken() {
-    setIsWorking(true);
-    setStatus("Registering token...");
-    try {
-      const res = await fetch("/api/tokens/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chain,
-          address: normalizedAddress,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Register failed");
-      setStatus("Token registered.");
-      await loadWhatsHot();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Register failed.";
-      setStatus(message);
+      setConnectErrorMessage(message);
     } finally {
       setIsWorking(false);
     }
@@ -255,15 +241,52 @@ export default function Home() {
     setStatus("Loading consensus...");
     try {
       const res = await fetch(`/api/tokens/${chain}/${normalizedAddress}`);
-      const data = await res.json();
+      const data = (await res.json()) as {
+        exists?: boolean;
+        consensus: Consensus;
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? "Check failed");
-      setConsensus(data.consensus as Consensus);
+      setConsensus(data.consensus);
       setLastUpdatedAt(new Date());
+      if (data.exists === false) {
+        setIsRegisterSuggestionModalOpen(true);
+      }
       setStatus("Consensus updated.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Check failed.";
       setConsensus(EMPTY_CONSENSUS);
       setStatus(message);
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function registerCurrentToken() {
+    if (!connectedWallet) {
+      setIsRegisterSuggestionModalOpen(false);
+      setIsConnectVoteModalOpen(true);
+      return;
+    }
+
+    setIsWorking(true);
+    try {
+      const res = await fetch("/api/tokens/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chain,
+          address: normalizedAddress,
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Register failed");
+
+      setIsRegisterSuggestionModalOpen(false);
+      await loadWhatsHot();
+      await checkToken();
+    } catch {
+      setIsRegisterSuggestionModalOpen(false);
     } finally {
       setIsWorking(false);
     }
@@ -362,7 +385,7 @@ export default function Home() {
 
   async function submitVote(choice: VoteChoice) {
     if (!connectedWallet) {
-      setStatus("Connect wallet first.");
+      setVoteErrorMessage("Connect wallet first.");
       return;
     }
 
@@ -421,7 +444,7 @@ export default function Home() {
       setExistingVoteChoice(choice);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Vote failed.";
-      setStatus(message);
+      setVoteErrorMessage(message);
     } finally {
       setIsWorking(false);
     }
@@ -451,12 +474,12 @@ export default function Home() {
 
   async function vote(choice: VoteChoice) {
     if (!connectedWallet) {
-      setStatus("Connect wallet first.");
+      setIsConnectVoteModalOpen(true);
       return;
     }
 
     if (!normalizedAddress) {
-      setStatus("Enter token address first.");
+      setVoteErrorMessage("Enter token address first.");
       return;
     }
 
@@ -568,7 +591,7 @@ export default function Home() {
           Community consensus only. Not financial advice.
         </p>
 
-        <section className="mt-6 grid gap-3 sm:grid-cols-[120px_1fr_auto_auto]">
+        <section className="mt-6 grid gap-3 sm:grid-cols-[120px_1fr_auto]">
           <div className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-2">
             <Image
               src={CHAIN_ICON_BY_KEY[chain]}
@@ -593,20 +616,13 @@ export default function Home() {
             className="rounded-xl border border-zinc-300 bg-white px-3 py-2"
           />
           <button
-            onClick={registerToken}
-            disabled={isWorking}
-            className="rounded-xl bg-zinc-900 px-4 py-2 text-white disabled:opacity-50"
-          >
-            Register
-          </button>
-          <button
             onClick={checkToken}
             disabled={isWorking}
-            aria-label="Check"
-            title="Check"
+            aria-label="Enter"
+            title="Enter"
             className="rounded-xl border border-zinc-300 bg-white px-4 py-2 disabled:opacity-50"
           >
-            <Image src="/icons/enter.svg" alt="Check" width={18} height={18} />
+            <Image src="/icons/enter.svg" alt="Enter" width={18} height={18} />
           </button>
         </section>
 
@@ -820,6 +836,91 @@ export default function Home() {
       {isCopiedToastVisible && (
         <div className="fixed left-1/2 top-1/2 z-40 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white shadow-lg">
           Copied
+        </div>
+      )}
+      {connectErrorMessage && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-zinc-900">Wallet connection failed</h2>
+            <p className="mt-2 text-sm text-zinc-600">{connectErrorMessage}</p>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setConnectErrorMessage(null)}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {voteErrorMessage && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-zinc-900">Vote failed</h2>
+            <p className="mt-2 text-sm text-zinc-600">{voteErrorMessage}</p>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setVoteErrorMessage(null)}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isConnectVoteModalOpen && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-zinc-900">Connect wallet to vote.</h2>
+            <p className="mt-2 text-sm text-zinc-600">One wallet = one vote.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setIsConnectVoteModalOpen(false)}
+                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setIsConnectVoteModalOpen(false);
+                  void connectWallet();
+                }}
+                disabled={isWorking || isPending}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+              >
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isRegisterSuggestionModalOpen && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-zinc-900">Token not listed yet</h2>
+            <p className="mt-2 text-sm text-zinc-600">
+              No token record was found. Would you like to register it now?
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setIsRegisterSuggestionModalOpen(false)}
+                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  void registerCurrentToken();
+                }}
+                disabled={isWorking}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+              >
+                Register
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {isChangeVoteModalOpen && pendingVoteChoice && (
