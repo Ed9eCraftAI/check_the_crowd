@@ -146,7 +146,7 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
     };
   }
 
-  const votes = await prisma.vote.findMany({
+  const votesRaw = await prisma.vote.findMany({
     where: {
       tokenId: token.id,
     },
@@ -154,6 +154,7 @@ export async function getTokenConsensus(chain: Chain, addressInput: string) {
       choice: true,
     },
   });
+  const votes = votesRaw as Array<{ choice: string }>;
 
   const appearsLegit = votes.filter(
     (vote) => String(vote.choice) === "appears_legit",
