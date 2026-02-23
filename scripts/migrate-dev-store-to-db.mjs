@@ -102,14 +102,17 @@ function main() {
   try {
     store = loadStore();
   } catch (error) {
-    console.error("Failed to read dev-store.json:", error instanceof Error ? error.message : error);
+    process.stderr.write(
+      `Failed to read dev-store.json: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+    );
     process.exit(1);
   }
 
   const sql = buildSql(store);
 
   if (!sql.includes("INSERT INTO")) {
-    console.log("No rows to migrate (tokens/votes are empty).");
     return;
   }
 
@@ -127,9 +130,6 @@ function main() {
     process.exit(result.status ?? 1);
   }
 
-  console.log(
-    `Migration complete: tokens=${store.tokens.length}, votes=${store.votes.length}`,
-  );
 }
 
 main();

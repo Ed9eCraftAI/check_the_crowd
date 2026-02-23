@@ -5,14 +5,6 @@ import { env } from "@/lib/env";
 
 const projectId = env("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID");
 
-if (env("NODE_ENV") !== "production") {
-  console.log("[wagmi.ts] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", {
-    exists: Boolean(projectId),
-    length: projectId?.length ?? 0,
-    preview: projectId ? `${projectId.slice(0, 4)}...` : null,
-  });
-}
-
 function buildConnectors() {
   const base = [injected()];
 
@@ -35,13 +27,7 @@ function buildConnectors() {
         },
       }),
     );
-  } catch (error) {
-    if (env("NODE_ENV") !== "production") {
-      console.warn(
-        "[wagmi.ts] walletConnect connector disabled:",
-        error instanceof Error ? error.message : error,
-      );
-    }
+  } catch {
   }
 
   return base;

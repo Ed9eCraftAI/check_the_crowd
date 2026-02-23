@@ -134,14 +134,6 @@ export default function Home() {
   }, [chain, normalizedAddress]);
 
   useEffect(() => {
-    console.log("[page.tsx] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", {
-      exists: Boolean(projectId),
-      length: projectId?.length ?? 0,
-      preview: projectId ? `${projectId.slice(0, 4)}...` : null,
-    });
-  }, [projectId]);
-
-  useEffect(() => {
     if (!isConnected) {
       setIsWalletMenuOpen(false);
       return;
@@ -188,15 +180,6 @@ export default function Home() {
     setStatus("Connecting wallet...");
     const targetChainId = CHAIN_ID_BY_KEY[chain];
     try {
-      console.log("[page.tsx] connectors before connect", {
-        projectIdExists: Boolean(projectId),
-        connectors: connectors.map((connector) => ({
-          id: connector.id,
-          name: connector.name,
-          type: connector.type,
-        })),
-      });
-
       const walletConnectConnector = connectors.find(
         (connector) =>
           connector.id === "walletConnect" ||

@@ -40,3 +40,6 @@ next-env.d.ts
 # Local database files
 prisma/*.db
 prisma/*.db-journal
+
+checklist.md
+prompt.md

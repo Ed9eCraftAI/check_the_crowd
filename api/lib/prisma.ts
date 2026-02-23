@@ -97,6 +97,6 @@ export const prisma =
   globalForPrisma.prisma ??
   createClient();
 
-if (env("NODE_ENV") !== "production") {
+if (env("NODE_ENV") === "development") {
   globalForPrisma.prisma = prisma;
 }

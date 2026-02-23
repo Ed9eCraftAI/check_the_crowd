@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
 import type { Chain, VoteChoice } from "@/lib/token";
-import { normalizeAddress, toConsensusLabel } from "@/lib/token";
+import { hashWalletAddress, normalizeAddress, toConsensusLabel } from "@/lib/token";
 
 const VOTE_NONCE_TTL_MS = 5 * 60 * 1000;
 
 export async function issueVoteNonce(walletInput: string) {
-  const wallet = normalizeAddress(walletInput);
+  const walletHash = hashWalletAddress(walletInput);
   const issuedAt = new Date();
   const expiresAt = new Date(issuedAt.getTime() + VOTE_NONCE_TTL_MS);
   const nonce = randomUUID();
@@ -14,7 +14,7 @@ export async function issueVoteNonce(walletInput: string) {
   await prisma.nonce.create({
     data: {
       id: randomUUID(),
-      wallet,
+      wallet: walletHash,
       nonce,
       issuedAt,
       expiresAt,
@@ -22,7 +22,7 @@ export async function issueVoteNonce(walletInput: string) {
   });
 
   return {
-    wallet,
+    walletHash,
     nonce,
     issuedAt: issuedAt.toISOString(),
     expiresAt: expiresAt.toISOString(),
@@ -49,11 +49,11 @@ export async function getActiveVoteNonce(input: {
   wallet: string;
   nonce: string;
 }) {
-  const wallet = normalizeAddress(input.wallet);
+  const walletHash = hashWalletAddress(input.wallet);
   const nonceRecord = await prisma.nonce.findUnique({
     where: {
       wallet_nonce: {
-        wallet,
+        wallet: walletHash,
         nonce: input.nonce,
       },
     },
@@ -166,48 +166,78 @@ export async function upsertVote(input: {
   choice: VoteChoice;
   signature: string;
   message: string;
+  nonce?: string;
 }) {
   const address = normalizeAddress(input.address);
-  const wallet = normalizeAddress(input.wallet);
+  const walletHash = hashWalletAddress(input.wallet);
 
-  const token = await prisma.token.upsert({
-    where: {
-      chain_address: {
+  const vote = await prisma.$transaction(async (tx) => {
+    const token = await tx.token.upsert({
+      where: {
+        chain_address: {
+          chain: input.chain,
+          address,
+        },
+      },
+      create: {
+        id: randomUUID(),
         chain: input.chain,
         address,
       },
-    },
-    create: {
-      id: randomUUID(),
-      chain: input.chain,
-      address,
-    },
-    update: {},
-    select: {
-      id: true,
-    },
-  });
-
-  const vote = await prisma.vote.upsert({
-    where: {
-      tokenId_voterWallet: {
-        tokenId: token.id,
-        voterWallet: wallet,
+      update: {},
+      select: {
+        id: true,
       },
-    },
-    create: {
-      id: randomUUID(),
-      tokenId: token.id,
-      voterWallet: wallet,
-      choice: input.choice,
-      signature: input.signature,
-      message: input.message,
-    },
-    update: {
-      choice: input.choice,
-      signature: input.signature,
-      message: input.message,
-    },
+    });
+
+    const previousVote = await tx.vote.findUnique({
+      where: {
+        tokenId_voterWallet: {
+          tokenId: token.id,
+          voterWallet: walletHash,
+        },
+      },
+      select: {
+        choice: true,
+      },
+    });
+
+    const nextVote = await tx.vote.upsert({
+      where: {
+        tokenId_voterWallet: {
+          tokenId: token.id,
+          voterWallet: walletHash,
+        },
+      },
+      create: {
+        id: randomUUID(),
+        tokenId: token.id,
+        voterWallet: walletHash,
+        choice: input.choice,
+        signature: input.signature,
+        message: input.message,
+      },
+      update: {
+        choice: input.choice,
+        signature: input.signature,
+        message: input.message,
+      },
+    });
+
+    await tx.voteHistory.create({
+      data: {
+        id: randomUUID(),
+        tokenId: token.id,
+        voterWallet: walletHash,
+        previousChoice: previousVote?.choice ?? null,
+        newChoice: input.choice,
+        signature: input.signature,
+        message: input.message,
+        nonce: input.nonce ?? null,
+      },
+    });
+
+    return nextVote;
   });
 
   return {
@@ -228,7 +258,7 @@ export async function getWalletVote(input: {
   wallet: string;
 }) {
   const address = normalizeAddress(input.address);
-  const wallet = normalizeAddress(input.wallet);
+  const walletHash = hashWalletAddress(input.wallet);
 
   const token = await prisma.token.findUnique({
     where: {
@@ -250,7 +280,7 @@ export async function getWalletVote(input: {
     where: {
       tokenId_voterWallet: {
         tokenId: token.id,
-        voterWallet: wallet,
+        voterWallet: walletHash,
       },
     },
     select: {

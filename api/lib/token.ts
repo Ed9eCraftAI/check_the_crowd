@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type Chain = "eth" | "bsc";
 export type VoteChoice = "appears_legit" | "suspicious" | "unclear";
 
@@ -35,6 +37,11 @@ export function isEvmAddress(value: string): boolean {
 
 export function normalizeAddress(value: string): string {
   return value.toLowerCase();
+}
+
+export function hashWalletAddress(wallet: string): string {
+  const normalized = normalizeAddress(wallet);
+  return createHash("sha256").update(normalized).digest("hex");
 }
 
 export function toConsensusLabel(

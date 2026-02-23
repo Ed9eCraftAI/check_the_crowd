@@ -190,6 +190,7 @@ export async function POST(req: Request) {
     choice: normalizedChoice,
     signature,
     message,
+    nonce,
   });
 
   return NextResponse.json({ ok: true });
