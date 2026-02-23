@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getWhatsHotTokens } from "@/lib/dev-store";
+import { getWhatsHotTokens } from "@/lib/db-store";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {

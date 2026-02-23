@@ -4,7 +4,7 @@ import {
   getActiveVoteNonce,
   getWalletVote,
   upsertVote,
-} from "@/lib/dev-store";
+} from "@/lib/db-store";
 import {
   isChain,
   isEvmAddress,

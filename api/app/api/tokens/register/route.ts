@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { registerToken } from "@/lib/dev-store";
+import { registerToken } from "@/lib/db-store";
 import { isChain, isEvmAddress, normalizeAddress } from "@/lib/token";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 

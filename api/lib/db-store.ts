@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import type { Chain, VoteChoice } from "@/lib/token";
 import { hashWalletAddress, normalizeAddress, toConsensusLabel } from "@/lib/token";
 
@@ -175,7 +176,7 @@ export async function upsertVote(input: {
   const address = normalizeAddress(input.address);
   const walletHash = hashWalletAddress(input.wallet);
 
-  const vote = await prisma.$transaction(async (tx) => {
+  const vote = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const token = await tx.token.upsert({
       where: {
         chain_address: {

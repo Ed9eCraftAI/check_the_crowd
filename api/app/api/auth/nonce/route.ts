@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { issueVoteNonce } from "@/lib/dev-store";
+import { issueVoteNonce } from "@/lib/db-store";
 import { isEvmAddress, normalizeAddress } from "@/lib/token";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
