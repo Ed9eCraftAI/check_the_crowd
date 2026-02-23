@@ -180,11 +180,20 @@ async function connectWallet() {
     setIsWorking(true);
     setStatus("Connecting wallet...");
     try {
+      const hasInjectedProvider =
+        typeof window !== "undefined" &&
+        typeof (window as Window & { ethereum?: unknown }).ethereum !== "undefined";
+      const noWalletDetectedMessage =
+        "No wallet detected.\nPlease install MetaMask or open this page in a wallet browser.";
+
       const walletConnectConnector = connectors.find(
         (connector) =>
           connector.id === "walletConnect" ||
           connector.name.toLowerCase().includes("walletconnect"),
       );
+      if (!hasInjectedProvider && !projectId && !walletConnectConnector) {
+        throw new Error(noWalletDetectedMessage);
+      }
 
       const injectedConnector = connectors.find((connector) => connector.id === "injected");
       if (injectedConnector) {
@@ -203,11 +212,12 @@ async function connectWallet() {
         return;
       }
 
-      throw new Error(
-        "No compatible connector found. Install wallet extension or set CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID.",
-      );
+      throw new Error(noWalletDetectedMessage);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Wallet connection failed.";
+      const rawMessage = error instanceof Error ? error.message : "Wallet connection failed.";
+      const message = rawMessage.includes('@walletconnect/ethereum-provider')
+        ? "No wallet detected.\nPlease install MetaMask or open this page in a wallet browser."
+        : rawMessage;
       setStatus(message);
       setConnectErrorMessage(message);
     } finally {
