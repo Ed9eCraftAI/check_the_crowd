@@ -269,6 +269,7 @@ export default function Home() {
 
 async function connectWallet() {
     setIsWorking(true);
+    setConnectErrorMessage(null);
     setStatus("Connecting wallet...");
     try {
       const hasInjectedProvider =
@@ -311,6 +312,7 @@ async function connectWallet() {
             throw new Error("Connected wallet account is invalid.");
           }
           await ensureAuthSession(account);
+          setConnectErrorMessage(null);
           setStatus(`Injected wallet connected: ${shortAddress(account)}`);
           return;
         }
@@ -323,6 +325,7 @@ async function connectWallet() {
           throw new Error("Connected wallet account is invalid.");
         }
         await ensureAuthSession(account);
+        setConnectErrorMessage(null);
         setStatus(`WalletConnect connected: ${shortAddress(account)}`);
         return;
       }
