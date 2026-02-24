@@ -5,6 +5,11 @@ import { env } from "@/lib/env";
 
 const projectId = env("CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID");
 const appUrl = env("CHECK_THE_CROWD_APP_URL") ?? "http://localhost:3000";
+let walletConnectInitErrorMessage: string | null = null;
+
+export function getWalletConnectInitErrorMessage(): string | null {
+  return walletConnectInitErrorMessage;
+}
 
 function buildConnectors() {
   const injectedConnector = injected();
@@ -29,7 +34,9 @@ function buildConnectors() {
         },
       }),
     ];
-  } catch {
+  } catch (error) {
+    walletConnectInitErrorMessage =
+      error instanceof Error ? error.message : String(error);
     return [injectedConnector];
   }
 }

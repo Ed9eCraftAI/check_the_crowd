@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import Image from "next/image";
 import { buildAuthSigningMessage } from "@/lib/auth-message";
 import type { VoteChoice } from "@/lib/token";
+import { getWalletConnectInitErrorMessage } from "@/lib/wagmi";
 
 type Chain = "eth" | "bsc" | "sol";
 type Consensus = {
@@ -265,8 +266,16 @@ async function connectWallet() {
           connector.id === "walletConnect" ||
           connector.name.toLowerCase().includes("walletconnect"),
       );
+      const walletConnectInitError = getWalletConnectInitErrorMessage();
       if (!hasInjectedProvider && !projectId && !walletConnectConnector) {
         throw new Error(noWalletDetectedMessage);
+      }
+      if (!hasInjectedProvider && projectId && !walletConnectConnector) {
+        throw new Error(
+          walletConnectInitError
+            ? `WalletConnect initialization failed: ${walletConnectInitError}`
+            : "WalletConnect initialization failed. Check project ID and deployment dependencies.",
+        );
       }
 
       const injectedConnector = connectors.find((connector) => connector.id === "injected");
