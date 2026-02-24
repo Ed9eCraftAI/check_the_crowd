@@ -668,7 +668,10 @@ async function connectWallet() {
             />
             <select
               value={chain}
-              onChange={(e) => setChain(e.target.value as Chain)}
+              onChange={(e) => {
+                setChain(e.target.value as Chain);
+                setTokenAddress("");
+              }}
               className="w-full bg-transparent py-2 outline-none"
             >
               <option value="eth">eth</option>
