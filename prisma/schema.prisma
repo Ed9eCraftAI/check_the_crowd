@@ -17,6 +17,7 @@ datasource db {
 enum Chain {
   eth
   bsc
+  sol
 }
 
 enum VoteChoice {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export type Chain = "eth" | "bsc";
+export type Chain = "eth" | "bsc" | "sol";
 export type VoteChoice = "appears_legit" | "suspicious" | "unclear";
 
 export type TokenRecord = {
@@ -25,7 +25,7 @@ export type DevStore = {
   votes: VoteRecord[];
 };
 
-export const CHAINS: Chain[] = ["eth", "bsc"];
+export const CHAINS: Chain[] = ["eth", "bsc", "sol"];
 
 export function isChain(value: string): value is Chain {
   return CHAINS.includes(value as Chain);
@@ -35,8 +35,21 @@ export function isEvmAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+export function isSolAddress(value: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value);
+}
+
+export function isTokenAddressByChain(chain: Chain, value: string): boolean {
+  if (chain === "sol") return isSolAddress(value);
+  return isEvmAddress(value);
+}
+
 export function normalizeAddress(value: string): string {
-  return value.toLowerCase();
+  const trimmed = value.trim();
+  if (trimmed.startsWith("0x") || trimmed.startsWith("0X")) {
+    return trimmed.toLowerCase();
+  }
+  return trimmed;
 }
 
 export function hashWalletAddress(wallet: string): string {

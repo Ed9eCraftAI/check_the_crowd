@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTokenConsensus } from "@/lib/db-store";
-import { isChain, isEvmAddress, normalizeAddress } from "@/lib/token";
+import { isChain, isTokenAddressByChain, normalizeAddress } from "@/lib/token";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { getTokenMetadataFromDexScreener } from "@/lib/token-metadata";
 
@@ -35,13 +35,13 @@ export async function GET(_: Request, { params }: Params) {
 
   if (!isChain(chain)) {
     return NextResponse.json(
-      { error: "Invalid chain. Use one of: eth, bsc" },
+      { error: "Invalid chain. Use one of: eth, bsc, sol" },
       { status: 400 },
     );
   }
-  if (!isEvmAddress(address)) {
+  if (!isTokenAddressByChain(chain, address)) {
     return NextResponse.json(
-      { error: "Invalid address. Must be a valid EVM address." },
+      { error: "Invalid address for selected chain." },
       { status: 400 },
     );
   }

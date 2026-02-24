@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { env } from "@/lib/env";
 import Image from "next/image";
-import { buildVoteSigningMessage } from "@/lib/sign-message";
 import type { VoteChoice } from "@/lib/token";
 
-type Chain = "eth" | "bsc";
+type Chain = "eth" | "bsc" | "sol";
 type Consensus = {
   total: number;
   appearsLegit: number;
@@ -38,7 +37,15 @@ const EMPTY_CONSENSUS: Consensus = {
 const CHAIN_ICON_BY_KEY: Record<Chain, string> = {
   eth: "/chains/eth.svg",
   bsc: "/chains/bsc.svg",
+  sol: "/chains/sol.svg",
 };
+
+function isAddressValidForChain(chain: Chain, value: string): boolean {
+  if (chain === "sol") {
+    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value);
+  }
+  return /^0x[a-f0-9]{40}$/i.test(value);
+}
 
 const VOTE_UI: Record<
   VoteChoice,
@@ -119,10 +126,9 @@ export default function Home() {
   const { address: connectedWallet, isConnected } = useAccount();
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
-  const { signMessageAsync } = useSignMessage();
 
   const normalizedAddress = useMemo(
-    () => tokenAddress.trim().toLowerCase(),
+    () => tokenAddress.trim(),
     [tokenAddress],
   );
   const projectId = env("CHECK_THE_CROWD_WALLETCONNECT_PROJECT_ID");
@@ -238,8 +244,8 @@ async function connectWallet() {
       return;
     }
 
-    if (!/^0x[a-f0-9]{40}$/i.test(normalizedAddress)) {
-      setCheckErrorMessage("Invalid token address format. Use a valid EVM address.");
+    if (!isAddressValidForChain(chain, normalizedAddress)) {
+      setCheckErrorMessage("Invalid token address format for selected chain.");
       return;
     }
 
@@ -327,7 +333,7 @@ async function connectWallet() {
   }
 
   useEffect(() => {
-    if (!/^0x[a-f0-9]{40}$/i.test(normalizedAddress)) return;
+    if (!isAddressValidForChain(chain, normalizedAddress)) return;
 
     const intervalId = window.setInterval(() => {
       void (async () => {
@@ -400,38 +406,8 @@ async function connectWallet() {
     }
 
     setIsWorking(true);
-    setStatus(`Signing ${choice} vote...`);
+    setStatus(`Submitting ${choice} vote...`);
     try {
-      const nonceRes = await fetch("/api/auth/nonce", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: connectedWallet.toLowerCase() }),
-      });
-      const nonceData = await nonceRes.json();
-      if (!nonceRes.ok) {
-        throw new Error(nonceData.error ?? "Failed to issue nonce.");
-      }
-
-      const nonce = String(nonceData.nonce ?? "");
-      const issuedAt = String(nonceData.issuedAt ?? "");
-      const expiresAt = String(nonceData.expiresAt ?? "");
-      if (!nonce || !issuedAt || !expiresAt) {
-        throw new Error("Nonce response is invalid.");
-      }
-
-      const message = buildVoteSigningMessage({
-        domain: window.location.host,
-        chain,
-        address: normalizedAddress,
-        choice,
-        wallet: connectedWallet.toLowerCase(),
-        nonce,
-        issuedAt,
-        expiresAt,
-      });
-
-      const signature = await signMessageAsync({ message });
-
       const res = await fetch("/api/votes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -440,9 +416,6 @@ async function connectWallet() {
           address: normalizedAddress,
           wallet: connectedWallet.toLowerCase(),
           choice,
-          nonce,
-          signature,
-          message,
         }),
       });
       const data = await res.json();
@@ -617,6 +590,7 @@ async function connectWallet() {
             >
               <option value="eth">eth</option>
               <option value="bsc">bsc</option>
+              <option value="sol">sol</option>
             </select>
           </div>
           <div className="relative">

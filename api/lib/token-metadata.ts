@@ -30,6 +30,7 @@ type DexScreenerResponse = {
 const DEXSCREENER_CHAIN_BY_KEY: Record<Chain, string> = {
   eth: "ethereum",
   bsc: "bsc",
+  sol: "solana",
 };
 
 export async function getTokenMetadataFromDexScreener(input: {

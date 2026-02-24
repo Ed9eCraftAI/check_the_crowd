@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { registerToken } from "@/lib/db-store";
-import { isChain, isEvmAddress, normalizeAddress } from "@/lib/token";
+import { isChain, isTokenAddressByChain, normalizeAddress } from "@/lib/token";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 type RegisterBody = {
@@ -32,13 +32,13 @@ export async function POST(req: Request) {
 
   if (!chain || !isChain(chain)) {
     return NextResponse.json(
-      { error: "Invalid chain. Use one of: eth, bsc" },
+      { error: "Invalid chain. Use one of: eth, bsc, sol" },
       { status: 400 },
     );
   }
-  if (!address || !isEvmAddress(address)) {
+  if (!address || !isTokenAddressByChain(chain, address)) {
     return NextResponse.json(
-      { error: "Invalid address. Must be a valid EVM address." },
+      { error: "Invalid address for selected chain." },
       { status: 400 },
     );
   }

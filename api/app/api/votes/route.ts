@@ -1,44 +1,25 @@
 import { NextResponse } from "next/server";
 import {
-  consumeVoteNonce,
-  getActiveVoteNonce,
   getWalletVote,
   upsertVote,
 } from "@/lib/db-store";
 import {
   isChain,
   isEvmAddress,
+  isTokenAddressByChain,
   normalizeAddress,
   type VoteChoice,
 } from "@/lib/token";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { recoverMessageAddress } from "viem";
-import { buildVoteSigningMessage } from "@/lib/sign-message";
 
 type VoteBody = {
   chain?: string;
   address?: string;
   wallet?: string;
   choice?: string;
-  signature?: string;
-  message?: string;
-  nonce?: string;
 };
 
 const VOTE_CHOICES: VoteChoice[] = ["appears_legit", "suspicious", "unclear"];
-const MAX_MESSAGE_LENGTH = 500;
-const SIGNATURE_REGEX = /^0x[0-9a-f]+$/i;
-const MAX_SIGNATURE_LENGTH = 4096;
-
-function getRequestDomain(req: Request): string {
-  const forwardedHost = req.headers.get("x-forwarded-host");
-  if (forwardedHost) return forwardedHost;
-
-  const host = req.headers.get("host");
-  if (host) return host;
-
-  return "unknown";
-}
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
@@ -59,17 +40,17 @@ export async function POST(req: Request) {
   }
 
   const body = (await req.json().catch(() => ({}))) as VoteBody;
-  const { chain, address, wallet, choice, signature, message, nonce } = body;
+  const { chain, address, wallet, choice } = body;
 
   if (!chain || !isChain(chain)) {
     return NextResponse.json(
-      { error: "Invalid chain. Use one of: eth, bsc" },
+      { error: "Invalid chain. Use one of: eth, bsc, sol" },
       { status: 400 },
     );
   }
-  if (!address || !isEvmAddress(address)) {
+  if (!address || !isTokenAddressByChain(chain, address)) {
     return NextResponse.json(
-      { error: "Invalid address. Must be a valid EVM address." },
+      { error: "Invalid address for selected chain." },
       { status: 400 },
     );
   }
@@ -88,116 +69,18 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (!signature || !message) {
-    return NextResponse.json(
-      { error: "signature and message are required." },
-      { status: 400 },
-    );
-  }
-  if (!nonce) {
-    return NextResponse.json(
-      { error: "nonce is required." },
-      { status: 400 },
-    );
-  }
-  if (!SIGNATURE_REGEX.test(signature)) {
-    return NextResponse.json(
-      { error: "Invalid signature format." },
-      { status: 400 },
-    );
-  }
-  if (signature.length < 10 || signature.length > MAX_SIGNATURE_LENGTH) {
-    return NextResponse.json(
-      { error: "Invalid signature length." },
-      { status: 400 },
-    );
-  }
-  if (message.length > MAX_MESSAGE_LENGTH) {
-    return NextResponse.json(
-      { error: `message is too long. Max ${MAX_MESSAGE_LENGTH} characters.` },
-      { status: 400 },
-    );
-  }
-  if (nonce.length > 128) {
-    return NextResponse.json(
-      { error: "nonce is too long." },
-      { status: 400 },
-    );
-  }
-
   const normalizedChain = chain;
   const normalizedAddress = normalizeAddress(address);
   const normalizedWallet = normalizeAddress(wallet);
   const normalizedChoice = choice as VoteChoice;
-  const activeNonce = await getActiveVoteNonce({
-    wallet: normalizedWallet,
-    nonce,
-  });
-
-  if (!activeNonce) {
-    return NextResponse.json(
-      { error: "Invalid or expired nonce." },
-      { status: 401 },
-    );
-  }
-
-  const expectedMessage = buildVoteSigningMessage({
-    domain: getRequestDomain(req),
-    chain: normalizedChain,
-    address: normalizedAddress,
-    choice: normalizedChoice,
-    wallet: normalizedWallet,
-    nonce,
-    issuedAt: activeNonce.issuedAt,
-    expiresAt: activeNonce.expiresAt,
-  });
-
-  if (message !== expectedMessage) {
-    return NextResponse.json(
-      { error: "Invalid signed message content." },
-      { status: 400 },
-    );
-  }
-
-  let recoveredWallet: string;
-  try {
-    recoveredWallet = normalizeAddress(
-      await recoverMessageAddress({
-        message,
-        signature: signature as `0x${string}`,
-      }),
-    );
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid signature." },
-      { status: 400 },
-    );
-  }
-  if (recoveredWallet !== normalizedWallet) {
-    return NextResponse.json(
-      { error: "Signature does not match wallet." },
-      { status: 401 },
-    );
-  }
-
-  const nonceAccepted = await consumeVoteNonce({
-    nonceId: activeNonce.id,
-  });
-  if (!nonceAccepted) {
-    return NextResponse.json(
-      { error: "Invalid or already-used nonce." },
-      { status: 401 },
-    );
-  }
 
   await upsertVote({
     chain: normalizedChain,
     address: normalizedAddress,
     wallet: normalizedWallet,
     choice: normalizedChoice,
-    signature,
-    message,
-    nonce,
+    signature: "signature_removed",
+    message: "signature_removed",
   });
 
   return NextResponse.json({ ok: true });
@@ -211,13 +94,13 @@ export async function GET(req: Request) {
 
   if (!chain || !isChain(chain)) {
     return NextResponse.json(
-      { error: "Invalid chain. Use one of: eth, bsc" },
+      { error: "Invalid chain. Use one of: eth, bsc, sol" },
       { status: 400 },
     );
   }
-  if (!address || !isEvmAddress(address)) {
+  if (!address || !isTokenAddressByChain(chain, address)) {
     return NextResponse.json(
-      { error: "Invalid address. Must be a valid EVM address." },
+      { error: "Invalid address for selected chain." },
       { status: 400 },
     );
   }
