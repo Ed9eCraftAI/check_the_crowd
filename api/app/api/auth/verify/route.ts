@@ -5,6 +5,7 @@ import { recoverMessageAddress } from "viem";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { buildAuthSigningMessage } from "@/lib/auth-message";
 import { setAuthSessionCookie } from "@/lib/session";
+import { env } from "@/lib/env";
 
 type VerifyBody = {
   wallet?: string;
@@ -25,6 +26,15 @@ function getRequestDomain(req: Request): string {
   if (host) return host;
 
   return "unknown";
+}
+
+function getVerifyDebug(req: Request) {
+  return {
+    nodeEnv: env("NODE_ENV") ?? null,
+    hasSessionSecret: Boolean(env("CHECK_THE_CROWD_SESSION_SECRET")),
+    host: req.headers.get("host"),
+    forwardedHost: req.headers.get("x-forwarded-host"),
+  };
 }
 
 export async function POST(req: Request) {
@@ -106,7 +116,13 @@ export async function POST(req: Request) {
   });
   if (message !== expectedMessage) {
     return NextResponse.json(
-      { error: "Invalid signed message content." },
+      {
+        error: "Invalid signed message content.",
+        debug: {
+          ...getVerifyDebug(req),
+          expectedDomain: getRequestDomain(req),
+        },
+      },
       { status: 400 },
     );
   }
@@ -148,7 +164,10 @@ export async function POST(req: Request) {
       error instanceof Error
         ? error.message
         : "Failed to create auth session.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, debug: getVerifyDebug(req) },
+      { status: 500 },
+    );
   }
   return res;
 }
