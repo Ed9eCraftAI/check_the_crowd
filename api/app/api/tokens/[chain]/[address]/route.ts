@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getTokenConsensus } from "@/lib/db-store";
 import { isChain, isEvmAddress, normalizeAddress } from "@/lib/token";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getTokenMetadataFromDexScreener } from "@/lib/token-metadata";
 
 type Params = {
   params: Promise<{
@@ -45,6 +46,13 @@ export async function GET(_: Request, { params }: Params) {
     );
   }
 
-  const result = await getTokenConsensus(chain, normalizeAddress(address));
-  return NextResponse.json(result);
+  const normalizedAddress = normalizeAddress(address);
+  const [result, metadata] = await Promise.all([
+    getTokenConsensus(chain, normalizedAddress),
+    getTokenMetadataFromDexScreener({ chain, address: normalizedAddress }),
+  ]);
+  return NextResponse.json({
+    ...result,
+    metadata,
+  });
 }

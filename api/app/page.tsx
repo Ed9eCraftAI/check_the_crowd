@@ -22,6 +22,10 @@ type HotItem = {
   voteCount: number;
   badge?: "NEW";
 };
+type TokenMetadata = {
+  symbol: string;
+  name: string;
+};
 
 const EMPTY_CONSENSUS: Consensus = {
   total: 0,
@@ -109,6 +113,7 @@ export default function Home() {
   const [existingVoteChoice, setExistingVoteChoice] = useState<VoteChoice | null>(null);
   const [isCopiedToastVisible, setIsCopiedToastVisible] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [tokenMetadata, setTokenMetadata] = useState<TokenMetadata | null>(null);
   const walletMenuRef = useRef<HTMLDivElement | null>(null);
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { address: connectedWallet, isConnected } = useAccount();
@@ -133,6 +138,7 @@ export default function Home() {
     setConsensus(EMPTY_CONSENSUS);
     setLastUpdatedAt(null);
     setIsRegisterSuggestionModalOpen(false);
+    setTokenMetadata(null);
   }, [chain, normalizedAddress]);
 
   useEffect(() => {
@@ -244,10 +250,12 @@ async function connectWallet() {
       const data = (await res.json()) as {
         exists?: boolean;
         consensus: Consensus;
+        metadata?: TokenMetadata | null;
         error?: string;
       };
       if (!res.ok) throw new Error(data.error ?? "Check failed");
       setConsensus(data.consensus);
+      setTokenMetadata(data.metadata ?? null);
       setLastUpdatedAt(new Date());
       if (data.exists === false) {
         setIsRegisterSuggestionModalOpen(true);
@@ -305,6 +313,7 @@ async function connectWallet() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Check failed");
       setConsensus(data.consensus as Consensus);
+      setTokenMetadata((data.metadata as TokenMetadata | null | undefined) ?? null);
       setLastUpdatedAt(new Date());
       setStatus("Consensus updated.");
     } catch (error) {
@@ -327,6 +336,7 @@ async function connectWallet() {
           const data = await res.json();
           if (!res.ok) return;
           setConsensus(data.consensus as Consensus);
+          setTokenMetadata((data.metadata as TokenMetadata | null | undefined) ?? null);
           setLastUpdatedAt(new Date());
         } catch {
           // Ignore polling failures and keep last successful state.
@@ -768,6 +778,11 @@ async function connectWallet() {
             <div className="mt-1 text-xs text-zinc-500">
               {normalizedAddress || "Enter or select a token address to vote."}
             </div>
+            {tokenMetadata && (
+              <div className="mt-1 text-xs text-zinc-600">
+                {tokenMetadata.symbol} · {tokenMetadata.name}
+              </div>
+            )}
           </div>
 
           <div className="mt-4 flex items-center justify-between text-sm">
