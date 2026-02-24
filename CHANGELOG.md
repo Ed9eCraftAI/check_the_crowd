@@ -11,6 +11,46 @@ This project follows a simple versioning scheme:
 
 ---
 
+## v0.2 - Patch Update (2026-02-24)
+
+### Overview
+Post-release stabilization and UX/security updates based on deployment feedback.
+
+### Added
+
+- DEX Screener metadata lookup integration
+  - Token symbol/name now fetched and shown in Voting Token area
+- Solana chain support for token register/check/vote target selection
+- Login session API set (cookie-based)
+  - `POST /api/auth/nonce`
+  - `POST /api/auth/verify`
+  - `GET /api/auth/session`
+  - `DELETE /api/auth/session`
+
+### Changed
+
+- Vote flow migrated to session-auth model
+  - Login requires one signature at auth step
+  - `/api/votes` now validates auth cookie session before upsert
+- DB model updated for verification tracking
+  - `verificationMethod` added to `Vote` and `VoteHistory`
+  - `signature`/`message` fields changed to nullable
+- “NEW” badge window changed from 72 hours to 14 days
+- Contract input UX improved with inline clear (`x`) button
+
+### Security
+
+- Server-issued, signed, httpOnly session cookie introduced (24h TTL)
+- Nonce + signature verification moved to auth-verify step
+- Vote write path no longer trusts wallet value from client body
+
+### UX/Behavior
+
+- Removed auto-disconnect logic that forcefully disconnected wallet after 24h
+  - Session expiry is now handled by re-auth flow on action
+
+---
+
 ## v0.1 - Initial Public Release (2026-02-24)
 
 ### Overview
@@ -80,43 +120,3 @@ Before you buy, check the crowd.
 - No financial advice.
 - Community-driven signals only.
 - Future iterations will focus on stability, transparency, and data integrity.
-
----
-
-## v0.2 - Patch Update (2026-02-24)
-
-### Overview
-Post-release stabilization and UX/security updates based on deployment feedback.
-
-### Added
-
-- DEX Screener metadata lookup integration
-  - Token symbol/name now fetched and shown in Voting Token area
-- Solana chain support for token register/check/vote target selection
-- Login session API set (cookie-based)
-  - `POST /api/auth/nonce`
-  - `POST /api/auth/verify`
-  - `GET /api/auth/session`
-  - `DELETE /api/auth/session`
-
-### Changed
-
-- Vote flow migrated to session-auth model
-  - Login requires one signature at auth step
-  - `/api/votes` now validates auth cookie session before upsert
-- DB model updated for verification tracking
-  - `verificationMethod` added to `Vote` and `VoteHistory`
-  - `signature`/`message` fields changed to nullable
-- “NEW” badge window changed from 72 hours to 14 days
-- Contract input UX improved with inline clear (`x`) button
-
-### Security
-
-- Server-issued, signed, httpOnly session cookie introduced (24h TTL)
-- Nonce + signature verification moved to auth-verify step
-- Vote write path no longer trusts wallet value from client body
-
-### UX/Behavior
-
-- Removed auto-disconnect logic that forcefully disconnected wallet after 24h
-  - Session expiry is now handled by re-auth flow on action
