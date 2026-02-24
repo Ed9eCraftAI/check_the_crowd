@@ -322,7 +322,7 @@ export async function getWalletVote(input: {
 export async function getWhatsHotTokens(limitInput = 20, pageInput = 1) {
   const limit = Math.min(Math.max(1, limitInput), 20);
   const page = Math.max(1, pageInput);
-  const since = new Date(Date.now() - 72 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
   const tokens = await prisma.token.findMany({
     select: {
