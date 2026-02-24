@@ -11,7 +11,7 @@ This project follows a simple versioning scheme:
 
 ---
 
-## v0.2 - Patch Update (2026-02-24)
+## v0.1.1 - Patch Update (2026-02-24)
 
 ### Overview
 Post-release stabilization and UX/security updates based on deployment feedback.
@@ -51,7 +51,7 @@ Post-release stabilization and UX/security updates based on deployment feedback.
 
 ---
 
-## v0.1 - Initial Public Release (2026-02-24)
+## v0.1.0 - Initial Public Release (2026-02-24)
 
 ### Overview
 First public MVP release of **Check The Crowd**.
