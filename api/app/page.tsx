@@ -104,6 +104,7 @@ export default function Home() {
   const [connectErrorMessage, setConnectErrorMessage] = useState<string | null>(null);
   const [voteErrorMessage, setVoteErrorMessage] = useState<string | null>(null);
   const [checkErrorMessage, setCheckErrorMessage] = useState<string | null>(null);
+  const [isAddressInputFocused, setIsAddressInputFocused] = useState(false);
   const [pendingVoteChoice, setPendingVoteChoice] = useState<VoteChoice | null>(null);
   const [existingVoteChoice, setExistingVoteChoice] = useState<VoteChoice | null>(null);
   const [isCopiedToastVisible, setIsCopiedToastVisible] = useState(false);
@@ -608,12 +609,27 @@ async function connectWallet() {
               <option value="bsc">bsc</option>
             </select>
           </div>
-          <input
-            value={tokenAddress}
-            onChange={(e) => setTokenAddress(e.target.value)}
-            placeholder="Paste contract address (not token name)"
-            className="rounded-xl border border-zinc-300 bg-white px-3 py-2"
-          />
+          <div className="relative">
+            <input
+              value={tokenAddress}
+              onChange={(e) => setTokenAddress(e.target.value)}
+              onFocus={() => setIsAddressInputFocused(true)}
+              onBlur={() => setIsAddressInputFocused(false)}
+              placeholder="Paste contract address (not token name)"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 pr-10"
+            />
+            {isAddressInputFocused && tokenAddress.length > 0 && (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setTokenAddress("")}
+                aria-label="Clear address input"
+                className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md border border-zinc-300 bg-white text-sm text-zinc-600"
+              >
+                x
+              </button>
+            )}
+          </div>
           <button
             onClick={checkToken}
             disabled={isWorking}
