@@ -1,4 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { isEvmAddress, normalizeAddress } from "@/lib/token";
@@ -21,12 +23,38 @@ function base64UrlDecode(input: string): string {
   return Buffer.from(input, "base64url").toString("utf8");
 }
 
-function getSessionSecret(): string | null {
-  const secret = env("CHECK_THE_CROWD_SESSION_SECRET");
-  if (secret && secret.length >= 16) return secret;
-  if (env("NODE_ENV") !== "production") {
-    return "check_the_crowd_dev_only_session_secret";
+function readRootEnvValue(key: string): string | undefined {
+  const workspaceRoot = path.resolve(process.cwd(), "..");
+  const rootEnvPath = path.join(workspaceRoot, ".env");
+  if (!existsSync(rootEnvPath)) return undefined;
+
+  const content = readFileSync(rootEnvPath, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [k, ...rest] = trimmed.split("=");
+    if (k !== key) continue;
+    const raw = rest.join("=").trim();
+    if (
+      (raw.startsWith('"') && raw.endsWith('"')) ||
+      (raw.startsWith("'") && raw.endsWith("'"))
+    ) {
+      return raw.slice(1, -1);
+    }
+    return raw;
   }
+
+  return undefined;
+}
+
+function getSessionSecret(): string | null {
+  const secret =
+    env("CHECK_THE_CROWD_SESSION_SECRET") ??
+    readRootEnvValue("CHECK_THE_CROWD_SESSION_SECRET");
+  if (secret && secret.length >= 16) return secret;
+  // if (env("NODE_ENV") !== "production") {
+  //   return "check_the_crowd_dev_only_session_secret";
+  // }
   return null;
 }
 
