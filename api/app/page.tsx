@@ -283,13 +283,19 @@ async function connectWallet() {
 
       const injectedConnector = connectors.find((connector) => connector.id === "injected");
       if (injectedConnector) {
+        let injectedResult:
+          | Awaited<ReturnType<typeof connectAsync>>
+          | null = null;
         try {
-          const result = await connectAsync({ connector: injectedConnector });
-          await ensureAuthSession(result.accounts[0]);
-          setStatus(`Injected wallet connected: ${shortAddress(result.accounts[0])}`);
-          return;
+          injectedResult = await connectAsync({ connector: injectedConnector });
         } catch {
           // If injected wallet is unavailable, try WalletConnect next.
+        }
+
+        if (injectedResult) {
+          await ensureAuthSession(injectedResult.accounts[0]);
+          setStatus(`Injected wallet connected: ${shortAddress(injectedResult.accounts[0])}`);
+          return;
         }
       }
 
@@ -306,9 +312,6 @@ async function connectWallet() {
       const message = rawMessage.includes('@walletconnect/ethereum-provider')
         ? "No wallet detected.\nPlease install MetaMask or open this page in a wallet browser."
         : rawMessage;
-      disconnect();
-      void fetch("/api/auth/session", { method: "DELETE" });
-      clearWalletConnectStorage();
       setStatus(message);
       setConnectErrorMessage(message);
     } finally {
