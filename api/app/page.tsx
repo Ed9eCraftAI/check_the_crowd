@@ -611,7 +611,7 @@ async function connectWallet() {
           <input
             value={tokenAddress}
             onChange={(e) => setTokenAddress(e.target.value)}
-            placeholder="0x..."
+            placeholder="Paste contract address (not token name)"
             className="rounded-xl border border-zinc-300 bg-white px-3 py-2"
           />
           <button
