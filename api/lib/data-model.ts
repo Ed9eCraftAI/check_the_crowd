@@ -1,0 +1,2 @@
+export const HOT_NEW_WINDOW_DAYS = 14;
+export const HOT_NEW_WINDOW_MS = HOT_NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;

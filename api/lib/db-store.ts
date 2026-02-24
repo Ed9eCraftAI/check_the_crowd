@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
 import type { Chain, VoteChoice } from "@/lib/token";
 import { hashWalletAddress, normalizeAddress, toConsensusLabel } from "@/lib/token";
+import { HOT_NEW_WINDOW_MS } from "@/lib/data-model";
 
 type HotTokenQueryRow = {
   chain: Chain;
@@ -326,7 +327,7 @@ export async function getWalletVote(input: {
 export async function getWhatsHotTokens(limitInput = 20, pageInput = 1) {
   const limit = Math.min(Math.max(1, limitInput), 20);
   const page = Math.max(1, pageInput);
-  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - HOT_NEW_WINDOW_MS);
 
   const tokens = await prisma.token.findMany({
     select: {

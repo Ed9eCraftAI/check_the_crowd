@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import Image from "next/image";
 import { buildAuthSigningMessage } from "@/lib/auth-message";
 import type { VoteChoice } from "@/lib/token";
+import { HOT_NEW_WINDOW_DAYS } from "@/lib/data-model";
 import { getWalletConnectInitErrorMessage } from "@/lib/wagmi";
 
 type Chain = "eth" | "bsc" | "sol";
@@ -736,7 +737,7 @@ async function connectWallet() {
           </div>
           {hotItems.length === 0 ? (
             <p className="text-sm text-zinc-500">
-              No recent tokens in the last 72 hours.
+              No recent tokens in the last {HOT_NEW_WINDOW_DAYS} days.
             </p>
           ) : (
             <ul className="space-y-2">
