@@ -36,5 +36,9 @@ export async function POST(req: Request) {
   }
 
   const nonce = await issueVoteNonce(normalizeAddress(wallet));
-  return NextResponse.json(nonce);
+  return NextResponse.json({
+    nonce: nonce.nonce,
+    issuedAt: nonce.issuedAt,
+    expiresAt: nonce.expiresAt,
+  });
 }

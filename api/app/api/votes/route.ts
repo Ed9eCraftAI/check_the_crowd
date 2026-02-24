@@ -11,11 +11,11 @@ import {
   type VoteChoice,
 } from "@/lib/token";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getSessionFromRequest } from "@/lib/session";
 
 type VoteBody = {
   chain?: string;
   address?: string;
-  wallet?: string;
   choice?: string;
 };
 
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   }
 
   const body = (await req.json().catch(() => ({}))) as VoteBody;
-  const { chain, address, wallet, choice } = body;
+  const { chain, address, choice } = body;
 
   if (!chain || !isChain(chain)) {
     return NextResponse.json(
@@ -54,12 +54,6 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (!wallet || !isEvmAddress(wallet)) {
-    return NextResponse.json(
-      { error: "Invalid wallet. Must be a valid EVM address." },
-      { status: 400 },
-    );
-  }
   if (!choice || !VOTE_CHOICES.includes(choice as VoteChoice)) {
     return NextResponse.json(
       {
@@ -69,9 +63,17 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    return NextResponse.json(
+      { error: "Unauthenticated. Connect and sign in first." },
+      { status: 401 },
+    );
+  }
+
   const normalizedChain = chain;
   const normalizedAddress = normalizeAddress(address);
-  const normalizedWallet = normalizeAddress(wallet);
+  const normalizedWallet = normalizeAddress(session.wallet);
   const normalizedChoice = choice as VoteChoice;
 
   await upsertVote({

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
 import { env } from "@/lib/env";
 import Image from "next/image";
+import { buildAuthSigningMessage } from "@/lib/auth-message";
 import type { VoteChoice } from "@/lib/token";
 
 type Chain = "eth" | "bsc" | "sol";
@@ -129,6 +130,7 @@ export default function Home() {
   const { address: connectedWallet, isConnected } = useAccount();
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
 
   const normalizedAddress = useMemo(
     () => tokenAddress.trim(),
@@ -142,6 +144,64 @@ export default function Home() {
     if (!normalized) return null;
     return `https://x.com/${normalized}`;
   }, [xAccount]);
+
+  const hasAuthSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/auth/session", { method: "GET" });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const ensureAuthSession = useCallback(
+    async (walletInput: string) => {
+      const wallet = walletInput.toLowerCase();
+      if (await hasAuthSession()) return;
+
+      const nonceRes = await fetch("/api/auth/nonce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet }),
+      });
+      const nonceData = (await nonceRes.json()) as {
+        nonce?: string;
+        issuedAt?: string;
+        expiresAt?: string;
+        error?: string;
+      };
+      if (!nonceRes.ok) {
+        throw new Error(nonceData.error ?? "Failed to issue auth nonce.");
+      }
+
+      const nonce = String(nonceData.nonce ?? "");
+      const issuedAt = String(nonceData.issuedAt ?? "");
+      const expiresAt = String(nonceData.expiresAt ?? "");
+      if (!nonce || !issuedAt || !expiresAt) {
+        throw new Error("Nonce response is invalid.");
+      }
+
+      const message = buildAuthSigningMessage({
+        domain: window.location.host,
+        wallet,
+        nonce,
+        issuedAt,
+        expiresAt,
+      });
+      const signature = await signMessageAsync({ message });
+
+      const verifyRes = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet, signature, message, nonce }),
+      });
+      const verifyData = (await verifyRes.json()) as { error?: string };
+      if (!verifyRes.ok) {
+        throw new Error(verifyData.error ?? "Wallet sign-in failed.");
+      }
+    },
+    [hasAuthSession, signMessageAsync],
+  );
 
   useEffect(() => {
     setConsensus(EMPTY_CONSENSUS);
@@ -168,6 +228,7 @@ export default function Home() {
         window.localStorage.setItem(WALLET_CONNECTED_AT_KEY, String(now));
       } else if (now - connectedAt >= WALLET_SESSION_TTL_MS) {
         disconnect();
+        void fetch("/api/auth/session", { method: "DELETE" });
         clearWalletConnectStorage();
         window.localStorage.removeItem(WALLET_CONNECTED_AT_KEY);
         setIsWalletMenuOpen(false);
@@ -190,6 +251,7 @@ export default function Home() {
       if (!Number.isFinite(connectedAt)) return;
       if (Date.now() - connectedAt >= WALLET_SESSION_TTL_MS) {
         disconnect();
+        void fetch("/api/auth/session", { method: "DELETE" });
         clearWalletConnectStorage();
         window.localStorage.removeItem(WALLET_CONNECTED_AT_KEY);
         setIsWalletMenuOpen(false);
@@ -249,6 +311,7 @@ async function connectWallet() {
       if (injectedConnector) {
         try {
           const result = await connectAsync({ connector: injectedConnector });
+          await ensureAuthSession(result.accounts[0]);
           setStatus(`Injected wallet connected: ${shortAddress(result.accounts[0])}`);
           return;
         } catch {
@@ -258,6 +321,7 @@ async function connectWallet() {
 
       if (projectId && walletConnectConnector) {
         const result = await connectAsync({ connector: walletConnectConnector });
+        await ensureAuthSession(result.accounts[0]);
         setStatus(`WalletConnect connected: ${shortAddress(result.accounts[0])}`);
         return;
       }
@@ -268,6 +332,9 @@ async function connectWallet() {
       const message = rawMessage.includes('@walletconnect/ethereum-provider')
         ? "No wallet detected.\nPlease install MetaMask or open this page in a wallet browser."
         : rawMessage;
+      disconnect();
+      void fetch("/api/auth/session", { method: "DELETE" });
+      clearWalletConnectStorage();
       setStatus(message);
       setConnectErrorMessage(message);
     } finally {
@@ -445,17 +512,33 @@ async function connectWallet() {
     setIsWorking(true);
     setStatus(`Submitting ${choice} vote...`);
     try {
-      const res = await fetch("/api/votes", {
+      await ensureAuthSession(connectedWallet);
+
+      let res = await fetch("/api/votes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chain,
           address: normalizedAddress,
-          wallet: connectedWallet.toLowerCase(),
           choice,
         }),
       });
-      const data = await res.json();
+      let data = (await res.json()) as { error?: string };
+
+      if (res.status === 401) {
+        await ensureAuthSession(connectedWallet);
+        res = await fetch("/api/votes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chain,
+            address: normalizedAddress,
+            choice,
+          }),
+        });
+        data = (await res.json()) as { error?: string };
+      }
+
       if (!res.ok) throw new Error(data.error ?? "Vote failed");
 
       setStatus(`Vote submitted: ${VOTE_UI[choice].label}`);
@@ -593,6 +676,7 @@ async function connectWallet() {
                     <button
                       onClick={() => {
                         disconnect();
+                        void fetch("/api/auth/session", { method: "DELETE" });
                         clearWalletConnectStorage();
                         if (typeof window !== "undefined") {
                           window.localStorage.removeItem(WALLET_CONNECTED_AT_KEY);
