@@ -11,7 +11,7 @@ This project follows a simple versioning scheme:
 
 ---
 
-## v0.1.0 - Initial Public Release (2026-02-XX)
+## v0.1 - Initial Public Release (2026-02-24)
 
 ### Overview
 First public MVP release of **Check The Crowd**.
