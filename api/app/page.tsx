@@ -81,6 +81,19 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function getAccountAddress(account: unknown): string | null {
+  if (typeof account === "string") return account;
+  if (
+    typeof account === "object" &&
+    account !== null &&
+    "address" in account &&
+    typeof (account as { address: unknown }).address === "string"
+  ) {
+    return (account as { address: string }).address;
+  }
+  return null;
+}
+
 function clearWalletConnectStorage() {
   if (typeof window === "undefined") return;
 
@@ -293,16 +306,24 @@ async function connectWallet() {
         }
 
         if (injectedResult) {
-          await ensureAuthSession(injectedResult.accounts[0]);
-          setStatus(`Injected wallet connected: ${shortAddress(injectedResult.accounts[0])}`);
+          const account = getAccountAddress(injectedResult.accounts[0]);
+          if (!account) {
+            throw new Error("Connected wallet account is invalid.");
+          }
+          await ensureAuthSession(account);
+          setStatus(`Injected wallet connected: ${shortAddress(account)}`);
           return;
         }
       }
 
       if (projectId && walletConnectConnector) {
         const result = await connectAsync({ connector: walletConnectConnector });
-        await ensureAuthSession(result.accounts[0]);
-        setStatus(`WalletConnect connected: ${shortAddress(result.accounts[0])}`);
+        const account = getAccountAddress(result.accounts[0]);
+        if (!account) {
+          throw new Error("Connected wallet account is invalid.");
+        }
+        await ensureAuthSession(account);
+        setStatus(`WalletConnect connected: ${shortAddress(account)}`);
         return;
       }
 
