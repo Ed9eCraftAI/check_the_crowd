@@ -22,6 +22,8 @@ type HotItem = {
   createdAt: string;
   voteCount: number;
   badge?: "NEW";
+  symbol?: string | null;
+  name?: string | null;
 };
 type TokenMetadata = {
   symbol: string;
@@ -769,6 +771,11 @@ async function connectWallet() {
                           <span>
                             {item.chain.toUpperCase()} {shortAddress(item.address)}
                           </span>
+                          {(item.symbol || item.name) && (
+                            <span className="text-xs font-normal text-zinc-600">
+                              · {item.symbol ?? "-"} {item.name ? `(${item.name})` : ""}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-zinc-500">
                           Votes {item.voteCount} · {new Date(item.createdAt).toLocaleString()}

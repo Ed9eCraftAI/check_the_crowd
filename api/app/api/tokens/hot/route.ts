@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getWhatsHotTokens } from "@/lib/db-store";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getTokenMetadataFromDexScreener } from "@/lib/token-metadata";
 
 export async function GET(req: Request) {
   const ip = getClientIp(req);
@@ -29,5 +30,22 @@ export async function GET(req: Request) {
   const page = Number.isNaN(parsedPage) ? 1 : parsedPage;
 
   const result = await getWhatsHotTokens(limit, page);
-  return NextResponse.json(result);
+  const items = await Promise.all(
+    result.items.map(async (item) => {
+      const metadata = await getTokenMetadataFromDexScreener({
+        chain: item.chain,
+        address: item.address,
+      });
+      return {
+        ...item,
+        symbol: metadata?.symbol ?? null,
+        name: metadata?.name ?? null,
+      };
+    }),
+  );
+
+  return NextResponse.json({
+    ...result,
+    items,
+  });
 }
