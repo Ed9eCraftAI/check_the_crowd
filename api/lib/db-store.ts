@@ -183,8 +183,9 @@ export async function upsertVote(input: {
   address: string;
   wallet: string;
   choice: VoteChoice;
-  signature: string;
-  message: string;
+  signature?: string;
+  message?: string;
+  verificationMethod?: "signed" | "connected_only";
   nonce?: string;
 }) {
   const address = normalizeAddress(input.address);
@@ -234,13 +235,15 @@ export async function upsertVote(input: {
         tokenId: token.id,
         voterWallet: walletHash,
         choice: input.choice,
-        signature: input.signature,
-        message: input.message,
+        signature: input.signature ?? null,
+        message: input.message ?? null,
+        verificationMethod: input.verificationMethod ?? "connected_only",
       },
       update: {
         choice: input.choice,
-        signature: input.signature,
-        message: input.message,
+        signature: input.signature ?? null,
+        message: input.message ?? null,
+        verificationMethod: input.verificationMethod ?? "connected_only",
       },
     });
 
@@ -251,8 +254,9 @@ export async function upsertVote(input: {
         voterWallet: walletHash,
         previousChoice: previousVote?.choice ?? null,
         newChoice: input.choice,
-        signature: input.signature,
-        message: input.message,
+        signature: input.signature ?? null,
+        message: input.message ?? null,
+        verificationMethod: input.verificationMethod ?? "connected_only",
         nonce: input.nonce ?? null,
       },
     });

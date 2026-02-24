@@ -14,8 +14,8 @@ export type VoteRecord = {
   address: string;
   voterWallet: string;
   choice: VoteChoice;
-  signature: string;
-  message: string;
+  signature: string | null;
+  message: string | null;
   createdAt: string;
   updatedAt: string;
 };

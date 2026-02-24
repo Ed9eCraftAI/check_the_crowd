@@ -79,8 +79,7 @@ export async function POST(req: Request) {
     address: normalizedAddress,
     wallet: normalizedWallet,
     choice: normalizedChoice,
-    signature: "signature_removed",
-    message: "signature_removed",
+    verificationMethod: "connected_only",
   });
 
   return NextResponse.json({ ok: true });

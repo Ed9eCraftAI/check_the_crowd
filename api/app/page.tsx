@@ -72,6 +72,9 @@ const VOTE_UI: Record<
   },
 };
 
+const WALLET_CONNECTED_AT_KEY = "check_the_crowd.wallet_connected_at";
+const WALLET_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -150,7 +153,27 @@ export default function Home() {
   useEffect(() => {
     if (!isConnected) {
       setIsWalletMenuOpen(false);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(WALLET_CONNECTED_AT_KEY);
+      }
       return;
+    }
+
+    if (typeof window !== "undefined") {
+      const now = Date.now();
+      const saved = window.localStorage.getItem(WALLET_CONNECTED_AT_KEY);
+      const connectedAt = saved ? Number(saved) : NaN;
+
+      if (!Number.isFinite(connectedAt)) {
+        window.localStorage.setItem(WALLET_CONNECTED_AT_KEY, String(now));
+      } else if (now - connectedAt >= WALLET_SESSION_TTL_MS) {
+        disconnect();
+        clearWalletConnectStorage();
+        window.localStorage.removeItem(WALLET_CONNECTED_AT_KEY);
+        setIsWalletMenuOpen(false);
+        setConnectErrorMessage("Wallet session expired after 24 hours. Please reconnect.");
+        return;
+      }
     }
 
     const onPointerDown = (event: MouseEvent) => {
@@ -161,10 +184,24 @@ export default function Home() {
     };
 
     document.addEventListener("mousedown", onPointerDown);
+    const intervalId = window.setInterval(() => {
+      const saved = window.localStorage.getItem(WALLET_CONNECTED_AT_KEY);
+      const connectedAt = saved ? Number(saved) : NaN;
+      if (!Number.isFinite(connectedAt)) return;
+      if (Date.now() - connectedAt >= WALLET_SESSION_TTL_MS) {
+        disconnect();
+        clearWalletConnectStorage();
+        window.localStorage.removeItem(WALLET_CONNECTED_AT_KEY);
+        setIsWalletMenuOpen(false);
+        setConnectErrorMessage("Wallet session expired after 24 hours. Please reconnect.");
+      }
+    }, 60_000);
+
     return () => {
       document.removeEventListener("mousedown", onPointerDown);
+      window.clearInterval(intervalId);
     };
-  }, [isConnected]);
+  }, [isConnected, disconnect]);
 
   const loadWhatsHot = useCallback(async (pageInput = 1) => {
     try {
@@ -557,6 +594,9 @@ async function connectWallet() {
                       onClick={() => {
                         disconnect();
                         clearWalletConnectStorage();
+                        if (typeof window !== "undefined") {
+                          window.localStorage.removeItem(WALLET_CONNECTED_AT_KEY);
+                        }
                         setIsWalletMenuOpen(false);
                         setStatus("Wallet disconnected.");
                       }}
